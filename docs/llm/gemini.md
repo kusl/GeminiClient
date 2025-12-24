@@ -298,3 +298,13 @@ Once you push, go to the **Actions** tab in your GitHub repository. You will see
 
 
 
+build fails
+Run dotnet publish GeminiClientConsole/GeminiClientConsole.csproj \
+      Determining projects to restore...
+      Restored /home/runner/work/GeminiClient/GeminiClient/GeminiClient/GeminiClient.csproj (in 1.36 sec).
+      Restored /home/runner/work/GeminiClient/GeminiClient/GeminiClientConsole/GeminiClientConsole.csproj (in 1.36 sec).
+    Warning: /home/runner/work/GeminiClient/GeminiClient/GeminiClient/obj/Release/net10.0/GeminiClient.AssemblyInfo.cs(18,59): warning CS7035: The specified version string '0.0.7.2.0' does not conform to the recommended format - major.minor.build.revision [/home/runner/work/GeminiClient/GeminiClient/GeminiClient/GeminiClient.csproj]    
+    Error: /home/runner/work/GeminiClient/GeminiClient/GeminiClient/obj/Release/net10.0/GeminiClient.AssemblyInfo.cs(22,55): error CS7034: The specified version string '0.0.7.2.0' does not conform to the required format - major[.minor[.build[.revision]]] [/home/runner/work/GeminiClient/GeminiClient/GeminiClient/GeminiClient.csproj]
+    Error: Process completed with exit code 1.
+
+
