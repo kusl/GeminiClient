@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Wed Dec 24 02:32:32 PM CST 2025
+Generated: Wed Dec 24 02:33:11 PM CST 2025
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -451,8 +451,8 @@ MODIFIED: 2025-12-24 13:29:56
 
 ================================================================================
 FILE: Directory.Packages.props
-SIZE: 2.59 KB
-MODIFIED: 2025-12-24 14:32:19
+SIZE: 1.29 KB
+MODIFIED: 2025-12-24 14:32:53
 ================================================================================
 
 <Project>
@@ -480,28 +480,6 @@ MODIFIED: 2025-12-24 14:32:19
 
   </ItemGroup>
 </Project>
-
-<!-- <Project>
-  <PropertyGroup>
-    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
-    
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.1" />
-  </ItemGroup>
-</Project> -->
 
 
 ================================================================================
@@ -3821,7 +3799,7 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 
 ===============================================================================
-EXPORT COMPLETED: Wed Dec 24 02:32:33 PM CST 2025
+EXPORT COMPLETED: Wed Dec 24 02:33:11 PM CST 2025
 Total Files Found: 32
 Files Exported: 32
 Files Skipped: 0 (binary or large files)
