@@ -2598,3 +2598,61 @@ Alternatively, you can simply rename the second occurrence to `httpEx2`, but the
 
 
 
+To allow **Gemini 2.0/3 Pro** to generate complete and accurate source files for adding conversational context while following best practices, the model needs a clear definition of the desired architecture.
+
+Below are the requirements defined in plain text for easy copy-pasting.
+
+### Context Management Requirements for GeminiClient
+
+**1. Data Model Requirements (GeminiRequest.cs)**
+
+* The `Content` class must be updated to include a `role` property (type: `string`) to distinguish between `user` and `model` turns.
+
+
+* The `role` property should be decorated with `[JsonPropertyName("role")]` to match the Gemini API specification.
+* The `GeminiRequest` class must remain the root container for a `List<Content>` named `Contents`.
+
+**2. API Client Interface Requirements (IGeminiApiClient.cs)**
+
+* The `IGeminiApiClient` interface must be refactored to accept a collection of messages instead of a single string prompt.
+* `GenerateContentAsync` should accept `IEnumerable<Content> history` and a `string modelName`.
+* `StreamGenerateContentAsync` should accept `IEnumerable<Content> history` and a `string modelName`.
+
+**3. API Client Implementation Requirements (GeminiApiClient.cs)**
+
+* Update the implementation to map the provided history directly to the `GeminiRequest.Contents` list.
+
+
+* Ensure that the streaming logic (`StreamGenerateContentAsync`) properly iterates through the full conversation history when constructing the SSE request.
+
+
+* Maintain existing error handling and `JsonSerializerContext` usage for AOT/Trimming compatibility.
+
+
+
+**4. Application State Requirements (AppRunner.cs)**
+
+* The `AppRunner` class must maintain a private, in-memory state of the conversation using a `List<Content>`.
+
+
+* Each new user input must be appended to this list as a "user" role before being sent to the API.
+* Successful responses from the model must be appended to this list as a "model" role to maintain continuity for the next turn.
+* The system must support a "session reset" or "clear context" capability (optional but recommended for best practices).
+
+**5. Logging and Metrics Requirements**
+
+* 
+`ConversationLogger` should be updated to log the entire exchange or at least identify which parts of the log belong to a single continuous session.
+
+
+* Metrics like `PromptLength` should now reflect the total length of the conversation history sent, not just the last prompt.
+
+
+
+**6. Code Generation Constraints**
+
+* All generated code must use **C# 13 / .NET 10** features (e.g., primary constructors where appropriate, collection expressions).
+
+
+* Use **file-scoped namespaces** for all classes.
+* Ensure all JSON models are compatible with the existing `GeminiJsonContext` source generator.
