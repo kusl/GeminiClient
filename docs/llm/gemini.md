@@ -26,7 +26,7 @@ permissions:
   contents: write # Required to create releases and tags
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '10.0.x'
   PROJECT_PATH: 'GeminiClientConsole/GeminiClientConsole.csproj'
 
 jobs:

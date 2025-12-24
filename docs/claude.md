@@ -233,6 +233,6 @@ In summary, `Directory.Build.props` is a cornerstone of modern .NET development 
 
 Goodbye! ??
 
-C:\code\LearningByDoing\GeminiClientConsole\bin\Debug\net9.0\GeminiClientConsole.exe (process 12712) exited with code 0 (0x0).
+C:\code\LearningByDoing\GeminiClientConsole\bin\Debug\net10.0\GeminiClientConsole.exe (process 12712) exited with code 0 (0x0).
 To automatically close the console when debugging stops, enable Tools->Options->Debugging->Automatically close the console when debugging stops.
 Press any key to close this window . . .

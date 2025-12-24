@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Developer Experience**: Comprehensive error messages and user-friendly interface
 
 ### Technical
-- Built with .NET 9.0 framework
+- Built with .NET 10.0 framework
 - Self-contained, trimmed single-file executables
 - Dependency injection with Microsoft.Extensions.Hosting
 - Robust configuration management with validation

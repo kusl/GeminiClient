@@ -5,7 +5,7 @@ A powerful, interactive command-line client for Google's Gemini AI API with **re
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/yourusername/GeminiClient)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/yourusername/GeminiClient/build-and-release.yml)
 ![Platform Support](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
-![.NET](https://img.shields.io/badge/.NET-9.0-purple)
+![.NET](https://img.shields.io/badge/.NET-10.0-purple)
 ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
 
 ## 🔑 Quick Start - API Key Required!
@@ -283,7 +283,7 @@ Set `ModelPreference` to control automatic model selection:
 
 ### Prerequisites
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Git
 
 ### Build Steps

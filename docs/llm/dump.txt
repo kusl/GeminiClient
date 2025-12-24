@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Wed Dec 24 01:20:31 PM CST 2025
+Generated: Wed Dec 24 01:32:23 PM CST 2025
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -10,7 +10,8 @@ DIRECTORY STRUCTURE:
 .
 ├── docs
 │   ├── llm
-│   │   └── dump.txt
+│   │   ├── dump.txt
+│   │   └── gemini.md
 │   └── claude.md
 ├── GeminiClient
 │   ├── Models
@@ -38,8 +39,8 @@ DIRECTORY STRUCTURE:
 │   └── Program.cs
 ├── .github
 │   └── workflows
-│       ├── build-and-release.yml
-│       └── ci.yml
+│       ├── ci.yml
+│       └── continuous-release.yml
 ├── build-release.ps1
 ├── changelog.md
 ├── Directory.Build.props
@@ -237,7 +238,7 @@ Write-Host "=================================================================" -
 ================================================================================
 FILE: changelog.md
 SIZE: 2.40 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 13:29:06
 ================================================================================
 
 # Changelog
@@ -286,7 +287,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Developer Experience**: Comprehensive error messages and user-friendly interface
 
 ### Technical
-- Built with .NET 9.0 framework
+- Built with .NET 10.0 framework
 - Self-contained, trimmed single-file executables
 - Dependency injection with Microsoft.Extensions.Hosting
 - Robust configuration management with validation
@@ -316,7 +317,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ================================================================================
 FILE: Directory.Build.props
 SIZE: 1.23 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 13:29:56
 ================================================================================
 
 <Project>
@@ -338,7 +339,7 @@ MODIFIED: 2025-12-24 13:18:10
     <Company>kusl</Company>
     
     <!-- .NET Configuration -->
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     
@@ -1525,8 +1526,8 @@ public class ConsoleModelSelector
 
 ================================================================================
 FILE: GeminiClientConsole/GeminiClientConsole.csproj
-SIZE: 1.53 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 1.54 KB
+MODIFIED: 2025-12-24 13:32:10
 ================================================================================
 
 ﻿<!-- GeminiClientConsole/GeminiClientConsole.csproj -->
@@ -1559,9 +1560,9 @@ MODIFIED: 2025-12-24 13:18:10
   </ItemGroup>
  
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
   </ItemGroup>
  
   <ItemGroup>
@@ -1986,7 +1987,7 @@ public class GeminiApiOptionsValidator : IValidateOptions<GeminiApiOptions>
 ================================================================================
 FILE: GeminiClient/GeminiClient.csproj
 SIZE: .99 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 13:31:13
 ================================================================================
 
 ﻿<!-- GeminiClient/GeminiClient.csproj -->
@@ -2008,10 +2009,10 @@ MODIFIED: 2025-12-24 13:18:10
   </PropertyGroup>
  
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="9.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="9.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.1" />
   </ItemGroup>
 </Project>
 
@@ -2646,224 +2647,9 @@ MODIFIED: 2025-12-24 13:18:10
 
 
 ================================================================================
-FILE: .github/workflows/build-and-release.yml
-SIZE: 6.62 KB
-MODIFIED: 2025-12-24 13:18:10
-================================================================================
-
-# .github/workflows/build-and-release.yml
-name: Build and Release
-
-on:
-  push:
-    tags:
-      - 'v*' # Triggers on version tags like v1.0.0
-  workflow_dispatch: # Allows manual triggering
-    inputs:
-      version:
-        description: 'Version number (e.g., 1.0.0)'
-        required: true
-        type: string
-
-env:
-  DOTNET_VERSION: '9.0.x'
-  PROJECT_PATH: 'GeminiClientConsole/GeminiClientConsole.csproj'
-  SOLUTION_PATH: 'GeminiClient.sln' # Update if your solution has a different name
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          # Windows targets
-          - os: win-x64
-            name: Windows-x64
-            extension: .exe
-          - os: win-x86
-            name: Windows-x86
-            extension: .exe
-          - os: win-arm64
-            name: Windows-ARM64
-            extension: .exe
-            
-          # Linux targets
-          - os: linux-x64
-            name: Linux-x64
-            extension: ''
-          - os: linux-arm
-            name: Linux-ARM
-            extension: ''
-          - os: linux-arm64
-            name: Linux-ARM64
-            extension: ''
-          - os: linux-musl-x64
-            name: Linux-Alpine-x64
-            extension: ''
-            
-          # macOS targets
-          - os: osx-x64
-            name: macOS-x64
-            extension: ''
-          - os: osx-arm64
-            name: macOS-ARM64
-            extension: ''
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_VERSION }}
-
-    - name: Restore dependencies
-      run: dotnet restore ${{ env.PROJECT_PATH }}
-
-    - name: Build and Publish
-      run: |
-        dotnet publish ${{ env.PROJECT_PATH }} \
-          --configuration Release \
-          --runtime ${{ matrix.os }} \
-          --self-contained true \
-          --output ./publish/${{ matrix.os }} \
-          -p:PublishSingleFile=true \
-          -p:PublishTrimmed=true \
-          -p:IncludeNativeLibrariesForSelfExtract=true \
-          -p:EnableCompressionInSingleFile=true \
-          -p:DebugType=None \
-          -p:DebugSymbols=false
-
-    - name: Rename executable
-      run: |
-        if [ "${{ matrix.os }}" = "win-x64" ] || [ "${{ matrix.os }}" = "win-x86" ] || [ "${{ matrix.os }}" = "win-arm64" ]; then
-          mv ./publish/${{ matrix.os }}/GeminiClientConsole${{ matrix.extension }} \
-             ./publish/${{ matrix.os }}/gemini-client-${{ matrix.os }}${{ matrix.extension }}
-        else
-          mv ./publish/${{ matrix.os }}/GeminiClientConsole \
-             ./publish/${{ matrix.os }}/gemini-client-${{ matrix.os }}
-          chmod +x ./publish/${{ matrix.os }}/gemini-client-${{ matrix.os }}
-        fi
-
-    - name: Create archive
-      run: |
-        cd ./publish/${{ matrix.os }}
-        if [ "${{ matrix.os }}" = "win-x64" ] || [ "${{ matrix.os }}" = "win-x86" ] || [ "${{ matrix.os }}" = "win-arm64" ]; then
-          zip -r ../../gemini-client-${{ matrix.os }}.zip .
-        else
-          tar -czf ../../gemini-client-${{ matrix.os }}.tar.gz .
-        fi
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: gemini-client-${{ matrix.os }}
-        path: |
-          gemini-client-${{ matrix.os }}.zip
-          gemini-client-${{ matrix.os }}.tar.gz
-        if-no-files-found: ignore
-
-  create-release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Download all artifacts
-      uses: actions/download-artifact@v4
-      with:
-        path: ./artifacts
-
-    - name: Determine version
-      id: version
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          echo "version=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          echo "tag_name=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-        else
-          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-        fi
-
-    - name: Generate Release Notes
-      id: release_notes
-      run: |
-        cat << EOF > release_notes.md
-        # Gemini Client Console ${{ steps.version.outputs.version }}
-        
-        ## 🚀 Features
-        - Interactive model selection from available Gemini models
-        - Response time tracking and performance metrics
-        - Session statistics
-        - Configurable via appsettings.json or environment variables
-        
-        ## 📦 Installation
-        
-        ### Windows
-        1. Download the appropriate Windows package for your architecture
-        2. Extract the ZIP file
-        3. Run \`gemini-client-win-x64.exe\` (or your architecture's version)
-        
-        ### Linux
-        1. Download the appropriate Linux package for your architecture
-        2. Extract: \`tar -xzf gemini-client-linux-x64.tar.gz\`
-        3. Make executable: \`chmod +x gemini-client-linux-x64\`
-        4. Run: \`./gemini-client-linux-x64\`
-        
-        ### macOS
-        1. Download the appropriate macOS package for your architecture (x64 for Intel, arm64 for Apple Silicon)
-        2. Extract: \`tar -xzf gemini-client-osx-arm64.tar.gz\`
-        3. Make executable: \`chmod +x gemini-client-osx-arm64\`
-        4. Run: \`./gemini-client-osx-arm64\`
-        
-        ## ⚙️ Configuration
-        
-        Create an \`appsettings.json\` file in the same directory as the executable:
-        
-        \`\`\`json
-        {
-          "GeminiSettings": {
-            "ApiKey": "YOUR_API_KEY",
-            "BaseUrl": "https://generativelanguage.googleapis.com/",
-            "DefaultModel": "gemini-2.5-flash"
-          }
-        }
-        \`\`\`
-        
-        Or set environment variables:
-        - \`GeminiSettings__ApiKey=YOUR_API_KEY\`
-        - \`GEMINI_DEFAULT_MODEL=gemini-2.5-flash\`
-        
-        ## 📝 Changelog
-        See [changelog.md](https://github.com/${{ github.repository }}/blob/main/changelog.md) for details.
-        
-        ## 🐛 Known Issues
-        - Some experimental models may return server errors
-        - Use stable models like \`gemini-2.5-flash\` for best results
-        EOF
-
-    - name: Create GitHub Release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ steps.version.outputs.tag_name }}
-        name: Gemini Client ${{ steps.version.outputs.version }}
-        body_path: release_notes.md
-        draft: false
-        prerelease: false
-        files: |
-          ./artifacts/**/*.zip
-          ./artifacts/**/*.tar.gz
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-================================================================================
 FILE: .github/workflows/ci.yml
 SIZE: 4.15 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 13:29:49
 ================================================================================
 
 # .github/workflows/ci.yml
@@ -2884,7 +2670,7 @@ on:
       - '.gitignore'
 
 env:
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '10.0.x'
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
@@ -3023,6 +2809,106 @@ jobs:
           size=$(du -sh $dir | cut -f1)
           echo "| $platform | $size |" >> $GITHUB_STEP_SUMMARY
         done
+
+================================================================================
+FILE: .github/workflows/continuous-release.yml
+SIZE: 2.71 KB
+MODIFIED: 2025-12-24 13:30:18
+================================================================================
+
+name: Continuous Release
+
+# Trigger on every push to main
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual trigger if needed
+
+permissions:
+  contents: write # Required to create releases and tags
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  PROJECT_PATH: 'GeminiClientConsole/GeminiClientConsole.csproj'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    # Get the base version from Directory.Build.props (e.g., 0.0.7)
+    # And append the GitHub Run Number (e.g., 0.0.7.42)
+    - name: Generate Version
+      id: versioning
+      run: |
+        BASE_VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+        NEW_VERSION="${BASE_VERSION}.${{ github.run_number }}"
+        echo "Calculated Version: $NEW_VERSION"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    # Build for Linux (Fedora/Ubuntu compatible)
+    - name: Build Linux x64
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime linux-x64 \
+          --self-contained true \
+          --output ./publish/linux-x64 \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:Version=${{ steps.versioning.outputs.version }}
+
+        # Package
+        cd ./publish/linux-x64
+        chmod +x GeminiClientConsole
+        mv GeminiClientConsole gemini-client-linux-x64
+        tar -czf ../../gemini-client-linux-x64.tar.gz gemini-client-linux-x64
+        cd ../..
+
+    # Build for Windows
+    - name: Build Windows x64
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime win-x64 \
+          --self-contained true \
+          --output ./publish/win-x64 \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:Version=${{ steps.versioning.outputs.version }}
+
+        # Package
+        cd ./publish/win-x64
+        mv GeminiClientConsole.exe gemini-client-win-x64.exe
+        zip -r ../../gemini-client-win-x64.zip gemini-client-win-x64.exe
+        cd ../..
+
+    # Create the Release on GitHub
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.versioning.outputs.version }}
+        name: Release v${{ steps.versioning.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          gemini-client-linux-x64.tar.gz
+          gemini-client-win-x64.zip
+
 
 ================================================================================
 FILE: .gitignore
@@ -3438,8 +3324,8 @@ EndGlobal
 
 ================================================================================
 FILE: README.md
-SIZE: 18.09 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 18.10 KB
+MODIFIED: 2025-12-24 13:30:11
 ================================================================================
 
 # 🤖 Gemini Client Console
@@ -3449,7 +3335,7 @@ A powerful, interactive command-line client for Google's Gemini AI API with **re
 ![GitHub release (latest by date)](https://img.shields.io/github/v/release/yourusername/GeminiClient)
 ![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/yourusername/GeminiClient/build-and-release.yml)
 ![Platform Support](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
-![.NET](https://img.shields.io/badge/.NET-9.0-purple)
+![.NET](https://img.shields.io/badge/.NET-10.0-purple)
 ![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
 
 ## 🔑 Quick Start - API Key Required!
@@ -3727,7 +3613,7 @@ Set `ModelPreference` to control automatic model selection:
 
 ### Prerequisites
 
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 - Git
 
 ### Build Steps
@@ -3971,7 +3857,7 @@ Made with ❤️ using .NET 9, Google Gemini AI, and Server-Sent Events
 *Notice: This project contains code generated by Large Language Models such as Claude and Gemini. All code is experimental whether explicitly stated or not. The streaming implementation uses Server-Sent Events (SSE) for real-time communication with the Gemini API.*
 
 ===============================================================================
-EXPORT COMPLETED: Wed Dec 24 01:20:31 PM CST 2025
+EXPORT COMPLETED: Wed Dec 24 01:32:23 PM CST 2025
 Total Files Found: 30
 Files Exported: 30
 Files Skipped: 0 (binary or large files)
