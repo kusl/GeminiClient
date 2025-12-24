@@ -1,0 +1,92 @@
+name: Continuous Release
+
+# Trigger on every push to main
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Allows manual trigger if needed
+
+permissions:
+  contents: write # Required to create releases and tags
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  PROJECT_PATH: 'GeminiClientConsole/GeminiClientConsole.csproj'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    # Get the base version from Directory.Build.props (e.g., 0.0.7)
+    # And append the GitHub Run Number (e.g., 0.0.7.42)
+    - name: Generate Version
+      id: versioning
+      run: |
+        BASE_VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+        NEW_VERSION="${BASE_VERSION}.${{ github.run_number }}"
+        echo "Calculated Version: $NEW_VERSION"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    # Build for Linux (Fedora/Ubuntu compatible)
+    - name: Build Linux x64
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime linux-x64 \
+          --self-contained true \
+          --output ./publish/linux-x64 \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:Version=${{ steps.versioning.outputs.version }}
+
+        # Package
+        cd ./publish/linux-x64
+        chmod +x GeminiClientConsole
+        mv GeminiClientConsole gemini-client-linux-x64
+        tar -czf ../../gemini-client-linux-x64.tar.gz gemini-client-linux-x64
+        cd ../..
+
+    # Build for Windows
+    - name: Build Windows x64
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime win-x64 \
+          --self-contained true \
+          --output ./publish/win-x64 \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:Version=${{ steps.versioning.outputs.version }}
+
+        # Package
+        cd ./publish/win-x64
+        mv GeminiClientConsole.exe gemini-client-win-x64.exe
+        zip -r ../../gemini-client-win-x64.zip gemini-client-win-x64.exe
+        cd ../..
+
+    # Create the Release on GitHub
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.versioning.outputs.version }}
+        name: Release v${{ steps.versioning.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          gemini-client-linux-x64.tar.gz
+          gemini-client-win-x64.zip
