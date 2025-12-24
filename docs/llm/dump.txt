@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Wed Dec 24 02:16:58 PM CST 2025
+Generated: Wed Dec 24 02:32:32 PM CST 2025
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -44,6 +44,7 @@ DIRECTORY STRUCTURE:
 ├── build-release.ps1
 ├── changelog.md
 ├── Directory.Build.props
+├── Directory.Packages.props
 ├── .editorconfig
 ├── export.sh
 ├── .gitattributes
@@ -447,6 +448,61 @@ MODIFIED: 2025-12-24 13:29:56
     <RetainVMGarbageCollection>true</RetainVMGarbageCollection>
   </PropertyGroup>
 </Project>
+
+================================================================================
+FILE: Directory.Packages.props
+SIZE: 2.59 KB
+MODIFIED: 2025-12-24 14:32:19
+================================================================================
+
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.1" />
+
+  </ItemGroup>
+</Project>
+
+<!-- <Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
+    
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.1" />
+  </ItemGroup>
+</Project> -->
+
 
 ================================================================================
 FILE: .editorconfig
@@ -1619,8 +1675,8 @@ public class ConsoleModelSelector
 
 ================================================================================
 FILE: GeminiClientConsole/GeminiClientConsole.csproj
-SIZE: 1.54 KB
-MODIFIED: 2025-12-24 13:32:10
+SIZE: 1.49 KB
+MODIFIED: 2025-12-24 14:23:09
 ================================================================================
 
 ﻿<!-- GeminiClientConsole/GeminiClientConsole.csproj -->
@@ -1653,9 +1709,9 @@ MODIFIED: 2025-12-24 13:32:10
   </ItemGroup>
  
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
  
   <ItemGroup>
@@ -2079,8 +2135,8 @@ public class GeminiApiOptionsValidator : IValidateOptions<GeminiApiOptions>
 
 ================================================================================
 FILE: GeminiClient/GeminiClient.csproj
-SIZE: .99 KB
-MODIFIED: 2025-12-24 13:31:13
+SIZE: .93 KB
+MODIFIED: 2025-12-24 14:22:06
 ================================================================================
 
 ﻿<!-- GeminiClient/GeminiClient.csproj -->
@@ -2102,10 +2158,10 @@ MODIFIED: 2025-12-24 13:31:13
   </PropertyGroup>
  
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 </Project>
 
@@ -3765,9 +3821,9 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 
 ===============================================================================
-EXPORT COMPLETED: Wed Dec 24 02:16:58 PM CST 2025
-Total Files Found: 31
-Files Exported: 31
+EXPORT COMPLETED: Wed Dec 24 02:32:33 PM CST 2025
+Total Files Found: 32
+Files Exported: 32
 Files Skipped: 0 (binary or large files)
 Output File: /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
 ===============================================================================
