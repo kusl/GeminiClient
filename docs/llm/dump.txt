@@ -1,0 +1,3979 @@
+===============================================================================
+PROJECT EXPORT
+Generated: Wed Dec 24 01:20:31 PM CST 2025
+Project Path: /home/kushal/src/dotnet/GeminiClient
+===============================================================================
+
+DIRECTORY STRUCTURE:
+===================
+
+.
+├── docs
+│   ├── llm
+│   │   └── dump.txt
+│   └── claude.md
+├── GeminiClient
+│   ├── Models
+│   │   ├── GeminiModel.cs
+│   │   ├── GeminiRequest.cs
+│   │   ├── GeminiResponse.cs
+│   │   └── ModelSelectionCriteria.cs
+│   ├── GeminiApiClient.cs
+│   ├── GeminiApiException.cs
+│   ├── GeminiApiOptions.cs
+│   ├── GeminiApiOptionsValidator.cs
+│   ├── GeminiClient.csproj
+│   ├── IGeminiApiClient.cs
+│   ├── IModelService.cs
+│   ├── JsonSerializerContext.cs
+│   ├── ModelService.cs
+│   └── ServiceCollectionExtensions.cs
+├── GeminiClientConsole
+│   ├── Properties
+│   │   └── launchSettings.json.sample
+│   ├── AppRunner.cs
+│   ├── appsettings.json
+│   ├── ConsoleModelSelector.cs
+│   ├── GeminiClientConsole.csproj
+│   └── Program.cs
+├── .github
+│   └── workflows
+│       ├── build-and-release.yml
+│       └── ci.yml
+├── build-release.ps1
+├── changelog.md
+├── Directory.Build.props
+├── .editorconfig
+├── export.sh
+├── .gitattributes
+├── .gitignore
+├── LearningByDoing.sln
+└── README.md
+
+
+FILE CONTENTS:
+==============
+
+================================================================================
+FILE: build-release.ps1
+SIZE: 6.47 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+# build-release.ps1 - PowerShell script for local builds
+param(
+    [Parameter(Mandatory=$false)]
+    [string]$Version = "", # Leave empty for auto-detection
+
+    [Parameter(Mandatory=$false)]
+    [string[]]$Runtimes = @("win-x64", "win-x86", "win-arm64", "linux-x64", "linux-arm64", "linux-musl-x64", "osx-x64", "osx-arm64"),
+    
+    [Parameter(Mandatory=$false)]
+    [string]$Configuration = "Release",
+    
+    [Parameter(Mandatory=$false)]
+    [switch]$SkipTests
+)
+
+# Auto-detect version from git tags if not provided
+if ([string]::IsNullOrEmpty($Version)) {
+    try {
+        $gitTag = git describe --tags --exact-match HEAD 2>$null
+        if ($gitTag -match '^v?(.+)$') {
+            $Version = $Matches[1]
+            Write-Host "Auto-detected version from git tag: $Version" -ForegroundColor Green
+        } else {
+            throw "No exact tag match"
+        }
+    }
+    catch {
+        Write-Host "Could not auto-detect version. Please provide -Version parameter or create a git tag." -ForegroundColor Red
+        exit 1
+    }
+}
+
+$ErrorActionPreference = "Stop"
+
+Write-Host "Gemini Client Build Script v$Version (with Streaming Support)" -ForegroundColor Cyan
+Write-Host "=================================================================" -ForegroundColor Cyan
+
+# Clean previous builds
+Write-Host "`nCleaning previous builds..." -ForegroundColor Yellow
+if (Test-Path "./publish") {
+    Remove-Item -Path "./publish" -Recurse -Force
+}
+if (Test-Path "./artifacts") {
+    Remove-Item -Path "./artifacts" -Recurse -Force
+}
+
+# Restore dependencies
+Write-Host "`nRestoring dependencies..." -ForegroundColor Yellow
+dotnet restore
+
+# Run tests if not skipped
+if (-not $SkipTests) {
+    Write-Host "`nRunning tests..." -ForegroundColor Yellow
+    dotnet test --configuration $Configuration --verbosity minimal
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Tests failed! Aborting build." -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Create artifacts directory
+New-Item -ItemType Directory -Path "./artifacts" -Force | Out-Null
+
+# Build for each runtime
+foreach ($runtime in $Runtimes) {
+    Write-Host "`nBuilding for $runtime..." -ForegroundColor Green
+    
+    $outputPath = "./publish/$runtime"
+    
+    # Publish the application with streaming optimizations
+    dotnet publish ./GeminiClientConsole/GeminiClientConsole.csproj `
+        --configuration $Configuration `
+        --runtime $runtime `
+        --self-contained true `
+        --output $outputPath `
+        -p:PublishSingleFile=true `
+        -p:PublishTrimmed=true `
+        -p:IncludeNativeLibrariesForSelfExtract=true `
+        -p:EnableCompressionInSingleFile=true `
+        -p:DebugType=None `
+        -p:DebugSymbols=false `
+        -p:Version=$Version `
+        -p:FileVersion=$Version `
+        -p:AssemblyVersion=$Version `
+        -p:ServerGarbageCollection=true `
+        -p:ConcurrentGarbageCollection=true `
+        -p:RetainVMGarbageCollection=true
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Build failed for $runtime!" -ForegroundColor Red
+        exit 1
+    }
+    
+    # Rename executable
+    $extension = if ($runtime -like "win-*") { ".exe" } else { "" }
+    $oldName = Join-Path $outputPath "GeminiClientConsole$extension"
+    $newName = Join-Path $outputPath "gemini-client-$runtime$extension"
+    
+    if (Test-Path $oldName) {
+        Move-Item -Path $oldName -Destination $newName -Force
+        
+        # Make executable on Unix systems
+        if ($runtime -notlike "win-*") {
+            if ($IsLinux -or $IsMacOS) {
+                chmod +x $newName
+            }
+        }
+    }
+    
+    # Create archive
+    Write-Host "Creating archive for $runtime..." -ForegroundColor Yellow
+    
+    if ($runtime -like "win-*") {
+        # Create ZIP for Windows
+        $zipPath = "./artifacts/gemini-client-$runtime-v$Version.zip"
+        Compress-Archive -Path "$outputPath/*" -DestinationPath $zipPath -Force
+        Write-Host "Created: $zipPath" -ForegroundColor Green
+    }
+    else {
+        # Create TAR.GZ for Unix systems
+        $tarPath = "./artifacts/gemini-client-$runtime-v$Version.tar.gz"
+        
+        if ($IsLinux -or $IsMacOS) {
+            # Use native tar on Unix
+            Push-Location $outputPath
+            tar -czf "../../artifacts/gemini-client-$runtime-v$Version.tar.gz" .
+            Pop-Location
+        }
+        else {
+            # On Windows, create a ZIP instead (or install tar)
+            $zipPath = "./artifacts/gemini-client-$runtime-v$Version.zip"
+            Compress-Archive -Path "$outputPath/*" -DestinationPath $zipPath -Force
+            Write-Host "Created ZIP instead of TAR.GZ (Windows host): $zipPath" -ForegroundColor Yellow
+        }
+    }
+}
+
+# Generate checksums
+Write-Host "`nGenerating checksums..." -ForegroundColor Yellow
+$checksumFile = "./artifacts/checksums.txt"
+"# SHA256 Checksums for Gemini Client v$Version (with Streaming Support)" | Out-File $checksumFile
+"# Generated on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" | Add-Content $checksumFile
+"" | Add-Content $checksumFile
+
+Get-ChildItem "./artifacts" -Filter "*.zip" | ForEach-Object {
+    $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+    "$hash  $($_.Name)" | Add-Content $checksumFile
+}
+
+Get-ChildItem "./artifacts" -Filter "*.tar.gz" | ForEach-Object {
+    $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash
+    "$hash  $($_.Name)" | Add-Content $checksumFile
+}
+
+# Summary
+Write-Host "`n=================================================================" -ForegroundColor Cyan
+Write-Host "Build Complete! 🌊 Streaming Support Included" -ForegroundColor Green
+Write-Host "Version: $Version" -ForegroundColor White
+Write-Host "Configuration: $Configuration" -ForegroundColor White
+Write-Host "Runtimes: $($Runtimes.Count) platforms" -ForegroundColor White
+Write-Host "Artifacts created in: ./artifacts" -ForegroundColor White
+Write-Host "" -ForegroundColor White
+Write-Host "Files created:" -ForegroundColor Yellow
+Get-ChildItem "./artifacts" | ForEach-Object {
+    $sizeMB = [math]::Round($_.Length / 1MB, 2)
+    Write-Host "  - $($_.Name) ($sizeMB MB)" -ForegroundColor White
+}
+Write-Host "`nFeatures included in this build:" -ForegroundColor Yellow
+Write-Host "  ✅ Real-time streaming with SSE support" -ForegroundColor Green
+Write-Host "  ✅ Interactive model selection with animations" -ForegroundColor Green  
+Write-Host "  ✅ Advanced performance metrics" -ForegroundColor Green
+Write-Host "  ✅ Session statistics tracking" -ForegroundColor Green
+Write-Host "=================================================================" -ForegroundColor Cyan
+
+================================================================================
+FILE: changelog.md
+SIZE: 2.40 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.0.6] - 2025-08-09
+
+- Cleaned up changelog to remove extra text
+- Stream response from Gemini in server sent events
+
+## [0.0.5] - 2025-08-09
+
+### Fixed
+- Removed Console.Clear() that was destroying terminal scrollback buffer
+- Improved terminal compatibility for Linux/macOS users
+
+### Changed
+- Model selection screen now preserves terminal history
+- Use lower case `changelog` in Github Actions link
+
+## [0.0.4] - 2025-08-07
+
+### Added
+- Interactive console client for Google Gemini AI API
+- Dynamic model discovery and selection with smart recommendations
+- Real-time performance metrics with response time tracking and token speed analysis
+- Session statistics tracking for all requests
+- Support for multiple platform architectures (Windows x64/x86/ARM64, Linux x64/ARM/ARM64, macOS x64/ARM64)
+- Automated GitHub Actions CI/CD pipeline for cross-platform builds and releases
+- Configuration support via appsettings.json, environment variables, and user secrets
+- Smart error handling with automatic fallback to stable models
+- Visual performance indicators for response speeds
+- Model categorization (Flash, Pro, Ultra, Experimental)
+
+### Features
+- **Model Management**: Automatic fetching of available Gemini models with detailed information
+- **Performance Tracking**: Response time monitoring with tokens/second throughput analysis
+- **Cross-Platform Support**: Self-contained executables for Windows, Linux, and macOS
+- **Flexible Configuration**: Multiple configuration methods with proper precedence
+- **Developer Experience**: Comprehensive error messages and user-friendly interface
+
+### Technical
+- Built with .NET 9.0 framework
+- Self-contained, trimmed single-file executables
+- Dependency injection with Microsoft.Extensions.Hosting
+- Robust configuration management with validation
+- Comprehensive logging support
+
+## [0.0.3] - 2025-08-07
+
+### Fixed
+- Clean up compiler warnings
+
+## [0.0.2] - 2025-08-07
+
+### Fixed
+- Remove errant character 'W' from code
+
+## [0.0.1] - 2025-08-07
+
+### Fixed
+- Properly configure trimming for JSON serialization
+
+## [0.0.0] - 2025-08-07
+
+### Added
+- 🎉 Initial commit: Gemini Client Console v1.0.0
+- Basic project structure and foundation
+
+================================================================================
+FILE: Directory.Build.props
+SIZE: 1.23 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+<Project>
+  <PropertyGroup>
+    <!-- Single source of truth for version -->
+    <Version>0.0.7</Version>
+    <FileVersion>$(Version).0</FileVersion>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    
+    <!-- Repository Information -->
+    <RepositoryUrl>https://github.com/kusl/GeminiClient</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    
+    <!-- Common properties -->
+    <Copyright>Copyright © 2025</Copyright>
+    <Authors>kusl</Authors>
+    <Company>kusl</Company>
+    
+    <!-- .NET Configuration -->
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    
+    <!-- Build Optimizations -->
+    <TrimMode>partial</TrimMode>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    
+    <!-- Streaming Performance Optimizations -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>true</RetainVMGarbageCollection>
+  </PropertyGroup>
+</Project>
+
+================================================================================
+FILE: .editorconfig
+SIZE: 7.61 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+# editorconfig.org
+
+# top-most EditorConfig file
+root = true
+
+# Default settings:
+# A newline ending every file
+# Use 4 spaces as indentation
+[*]
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+# Generated code
+[*{_AssemblyInfo.cs,.notsupported.cs,AsmOffsets.cs}]
+generated_code = true
+
+# C# files
+[*.cs]
+# New line preferences
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# Indentation preferences
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = false
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+
+# Modifier preferences
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:suggestion
+
+# avoid this. unless absolutely necessary
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+
+# Types: use keywords instead of BCL types, and permit var only when the type is clear
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = false:none
+csharp_style_var_elsewhere = false:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+
+# name all constant fields using PascalCase
+dotnet_naming_rule.constant_fields_should_be_pascal_case.severity = suggestion
+dotnet_naming_rule.constant_fields_should_be_pascal_case.symbols  = constant_fields
+dotnet_naming_rule.constant_fields_should_be_pascal_case.style    = pascal_case_style
+dotnet_naming_symbols.constant_fields.applicable_kinds   = field
+dotnet_naming_symbols.constant_fields.required_modifiers = const
+dotnet_naming_style.pascal_case_style.capitalization = pascal_case
+
+# static fields should have s_ prefix
+dotnet_naming_rule.static_fields_should_have_prefix.severity = suggestion
+dotnet_naming_rule.static_fields_should_have_prefix.symbols  = static_fields
+dotnet_naming_rule.static_fields_should_have_prefix.style    = static_prefix_style
+dotnet_naming_symbols.static_fields.applicable_kinds   = field
+dotnet_naming_symbols.static_fields.required_modifiers = static
+dotnet_naming_symbols.static_fields.applicable_accessibilities = private, internal, private_protected
+dotnet_naming_style.static_prefix_style.required_prefix = s_
+dotnet_naming_style.static_prefix_style.capitalization = camel_case
+
+# internal and private fields should be _camelCase
+dotnet_naming_rule.camel_case_for_private_internal_fields.severity = suggestion
+dotnet_naming_rule.camel_case_for_private_internal_fields.symbols  = private_internal_fields
+dotnet_naming_rule.camel_case_for_private_internal_fields.style    = camel_case_underscore_style
+dotnet_naming_symbols.private_internal_fields.applicable_kinds = field
+dotnet_naming_symbols.private_internal_fields.applicable_accessibilities = private, internal
+dotnet_naming_style.camel_case_underscore_style.required_prefix = _
+dotnet_naming_style.camel_case_underscore_style.capitalization = camel_case
+
+# Code style defaults
+csharp_using_directive_placement = outside_namespace:suggestion
+dotnet_sort_system_directives_first = true
+csharp_prefer_braces = true:silent
+csharp_preserve_single_line_blocks = true:none
+csharp_preserve_single_line_statements = false:none
+csharp_prefer_static_local_function = true:suggestion
+csharp_prefer_simple_using_statement = false:none
+csharp_style_prefer_switch_expression = true:suggestion
+dotnet_style_readonly_field = true:suggestion
+
+# Expression-level preferences
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_prefer_collection_expression = when_types_exactly_match
+dotnet_style_explicit_tuple_names = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+dotnet_style_prefer_inferred_tuple_names = true:suggestion
+dotnet_style_prefer_inferred_anonymous_type_member_names = true:suggestion
+dotnet_style_prefer_auto_properties = true:suggestion
+dotnet_style_prefer_conditional_expression_over_assignment = true:silent
+dotnet_style_prefer_conditional_expression_over_return = true:silent
+csharp_prefer_simple_default_expression = true:suggestion
+
+# Expression-bodied members
+csharp_style_expression_bodied_methods = true:silent
+csharp_style_expression_bodied_constructors = true:silent
+csharp_style_expression_bodied_operators = true:silent
+csharp_style_expression_bodied_properties = true:silent
+csharp_style_expression_bodied_indexers = true:silent
+csharp_style_expression_bodied_accessors = true:silent
+csharp_style_expression_bodied_lambdas = true:silent
+csharp_style_expression_bodied_local_functions = true:silent
+
+# Pattern matching
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+csharp_style_inlined_variable_declaration = true:suggestion
+
+# Null checking preferences
+csharp_style_throw_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+
+# Other features
+csharp_style_prefer_index_operator = false:none
+csharp_style_prefer_range_operator = false:none
+csharp_style_pattern_local_over_anonymous_function = false:none
+
+# Space preferences
+csharp_space_after_cast = false
+csharp_space_after_colon_in_inheritance_clause = true
+csharp_space_after_comma = true
+csharp_space_after_dot = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_after_semicolon_in_for_statement = true
+csharp_space_around_binary_operators = before_and_after
+csharp_space_around_declaration_statements = do_not_ignore
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_before_comma = false
+csharp_space_before_dot = false
+csharp_space_before_open_square_brackets = false
+csharp_space_before_semicolon_in_for_statement = false
+csharp_space_between_empty_square_brackets = false
+csharp_space_between_method_call_empty_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_parentheses = false
+csharp_space_between_square_brackets = false
+
+# License header
+# file_header_template = Licensed to the .NET Foundation under one or more agreements.\nThe .NET Foundation licenses this file to you under the MIT license.
+
+# C++ Files
+[*.{cpp,h,in}]
+curly_bracket_next_line = true
+indent_brace_style = Allman
+
+# Xml project files
+[*.{csproj,vbproj,vcxproj,vcxproj.filters,proj,nativeproj,locproj}]
+indent_size = 2
+
+[*.{csproj,vbproj,proj,nativeproj,locproj}]
+charset = utf-8
+
+# Xml build files
+[*.builds]
+indent_size = 2
+
+# Xml files
+[*.{xml,stylecop,resx,ruleset}]
+indent_size = 2
+
+# Xml config files
+[*.{props,targets,config,nuspec}]
+indent_size = 2
+
+# YAML config files
+[*.{yml,yaml}]
+indent_size = 2
+
+# Shell scripts
+[*.sh]
+end_of_line = lf
+[*.{cmd,bat}]
+end_of_line = crlf
+
+================================================================================
+FILE: export.sh
+SIZE: 8.50 KB
+MODIFIED: 2025-12-24 13:19:57
+================================================================================
+
+#!/bin/bash
+# =============================================================================
+# Complete Project Export for LLM Analysis
+# =============================================================================
+# Exports all relevant source files, configs, and documentation for AI review.
+# Excludes: binaries, build outputs, IDE files, packages, git internals
+# =============================================================================
+
+set -e
+
+OUTPUT_DIR="docs/llm"
+OUTPUT_FILE="$OUTPUT_DIR/dump.txt"
+PROJECT_PATH="$(pwd)"
+
+# File extensions to include (comprehensive list for .NET/Avalonia projects)
+# Source code
+SOURCE_EXTS="cs|fs|vb"
+# XAML/Avalonia UI
+XAML_EXTS="axaml|xaml|paml"
+# Project/Build files
+PROJECT_EXTS="csproj|fsproj|vbproj|slnx|sln|props|targets|tasks"
+# Config files
+CONFIG_EXTS="json|yaml|yml|xml|config|settings"
+# Documentation
+DOC_EXTS="md|txt|rst|adoc"
+# Scripts
+SCRIPT_EXTS="sh|ps1|psm1|cmd|bat"
+# Web/Style (in case of Avalonia web or styling)
+STYLE_EXTS="css|scss|sass|less"
+# Data/Templates
+DATA_EXTS="sql|csv|resx|resources"
+# Docker/CI
+DEVOPS_EXTS="dockerfile|dockerignore|editorconfig|gitignore|gitattributes"
+
+# Combine all extensions
+ALL_EXTS="$SOURCE_EXTS|$XAML_EXTS|$PROJECT_EXTS|$CONFIG_EXTS|$DOC_EXTS|$SCRIPT_EXTS|$STYLE_EXTS|$DATA_EXTS"
+
+# Directories to exclude
+EXCLUDE_DIRS="bin|obj|.git|.vs|.idea|.vscode|node_modules|packages|TestResults|coverage|publish|artifacts|.nuget|wwwroot/lib"
+
+# Files to exclude (patterns)
+EXCLUDE_FILES="*.Designer.cs|*.g.cs|*.g.i.cs|AssemblyInfo.cs|*.min.js|*.min.css|package-lock.json|*.lock|*.bak"
+
+echo "=============================================="
+echo "  Project Export for LLM Analysis"
+echo "=============================================="
+echo ""
+echo "Project Path: $PROJECT_PATH"
+echo "Output File:  $OUTPUT_FILE"
+echo ""
+
+mkdir -p "$OUTPUT_DIR"
+
+# Start output file
+{
+    echo "==============================================================================="
+    echo "PROJECT EXPORT"
+    echo "Generated: $(date)"
+    echo "Project Path: $PROJECT_PATH"
+    echo "==============================================================================="
+    echo ""
+} > "$OUTPUT_FILE"
+
+# Directory structure
+echo "Generating directory structure..."
+{
+    echo "DIRECTORY STRUCTURE:"
+    echo "==================="
+    echo ""
+    # Try tree first, fall back to find
+    if command -v tree &> /dev/null; then
+        tree -a -I "$EXCLUDE_DIRS" --noreport --dirsfirst 2>/dev/null || echo "(tree command failed)"
+    else
+        find . -type d \( -name "bin" -o -name "obj" -o -name ".git" -o -name ".vs" -o -name ".idea" -o -name "node_modules" -o -name "packages" -o -name "TestResults" \) -prune -o -type f -print | sed 's|[^/]*/|  |g' | sort
+    fi
+    echo ""
+    echo ""
+} >> "$OUTPUT_FILE"
+
+# Build the find command dynamically
+echo "Collecting files..."
+
+# Create a temporary file for the file list
+TMPFILE=$(mktemp)
+
+# Find all relevant files
+find . -type f \( \
+    -iname "*.cs" -o \
+    -iname "*.fs" -o \
+    -iname "*.vb" -o \
+    -iname "*.axaml" -o \
+    -iname "*.xaml" -o \
+    -iname "*.paml" -o \
+    -iname "*.csproj" -o \
+    -iname "*.fsproj" -o \
+    -iname "*.vbproj" -o \
+    -iname "*.slnx" -o \
+    -iname "*.sln" -o \
+    -iname "*.props" -o \
+    -iname "*.targets" -o \
+    -iname "*.json" -o \
+    -iname "*.yaml" -o \
+    -iname "*.yml" -o \
+    -iname "*.xml" -o \
+    -iname "*.config" -o \
+    -iname "*.md" -o \
+    -iname "*.txt" -o \
+    -iname "*.sh" -o \
+    -iname "*.ps1" -o \
+    -iname "*.cmd" -o \
+    -iname "*.bat" -o \
+    -iname "*.sql" -o \
+    -iname "*.resx" -o \
+    -iname "*.css" -o \
+    -iname "*.scss" -o \
+    -iname "*.manifest" -o \
+    -iname "*.ico" -o \
+    -iname "Dockerfile" -o \
+    -iname "docker-compose*.yml" -o \
+    -iname ".editorconfig" -o \
+    -iname ".gitignore" -o \
+    -iname ".gitattributes" -o \
+    -iname "global.json" -o \
+    -iname "nuget.config" -o \
+    -iname "Directory.Build.props" -o \
+    -iname "Directory.Build.targets" -o \
+    -iname "Directory.Packages.props" \
+    \) \
+    ! -path "*/bin/*" \
+    ! -path "*/obj/*" \
+    ! -path "*/docs/*" \
+    ! -path "*/.git/*" \
+    ! -path "*/.vs/*" \
+    ! -path "*/.idea/*" \
+    ! -path "*/.vscode/*" \
+    ! -path "*/node_modules/*" \
+    ! -path "*/packages/*" \
+    ! -path "*/TestResults/*" \
+    ! -path "*/coverage/*" \
+    ! -path "*/publish/*" \
+    ! -path "*/artifacts/*" \
+    ! -path "*/.nuget/*" \
+    ! -name "*.Designer.cs" \
+    ! -name "*.g.cs" \
+    ! -name "*.g.i.cs" \
+    ! -name "*.min.js" \
+    ! -name "*.min.css" \
+    ! -name "package-lock.json" \
+    ! -name "*.bak" \
+    2>/dev/null | sort > "$TMPFILE"
+
+FILE_COUNT=$(wc -l < "$TMPFILE")
+echo "Found $FILE_COUNT files to export"
+echo ""
+
+# Add file contents header
+{
+    echo "FILE CONTENTS:"
+    echo "=============="
+    echo ""
+} >> "$OUTPUT_FILE"
+
+# Process each file
+COUNTER=0
+SKIPPED=0
+
+while IFS= read -r file; do
+    COUNTER=$((COUNTER + 1))
+    FILENAME="${file#./}"
+    
+    # Skip binary files (check if file is text)
+    if file "$file" | grep -qE "binary|executable|data|image"; then
+        # For some files we want to note they exist but not dump contents
+        if [[ "$file" =~ \.(ico|png|jpg|jpeg|gif|bmp|svg|woff|woff2|ttf|eot)$ ]]; then
+            SKIPPED=$((SKIPPED + 1))
+            echo "Skipping binary ($COUNTER/$FILE_COUNT): $FILENAME"
+            {
+                echo "================================================================================"
+                echo "FILE: $FILENAME"
+                echo "TYPE: [BINARY FILE - Contents not exported]"
+                echo "================================================================================"
+                echo ""
+            } >> "$OUTPUT_FILE"
+            continue
+        fi
+    fi
+    
+    # Get file info
+    FILESIZE=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "0")
+    MODIFIED=$(stat -c%y "$file" 2>/dev/null | cut -d'.' -f1 || stat -f"%Sm" -t "%Y-%m-%d %H:%M:%S" "$file" 2>/dev/null || echo "unknown")
+    
+    # Skip very large files (>500KB) - they're probably not source code
+    if [ "$FILESIZE" -gt 512000 ]; then
+        SKIPPED=$((SKIPPED + 1))
+        echo "Skipping large file ($COUNTER/$FILE_COUNT): $FILENAME ($(echo "scale=0; $FILESIZE/1024" | bc)KB)"
+        {
+            echo "================================================================================"
+            echo "FILE: $FILENAME"
+            echo "SIZE: $(echo "scale=2; $FILESIZE/1024" | bc) KB"
+            echo "TYPE: [LARGE FILE - Contents not exported, exceeds 500KB limit]"
+            echo "================================================================================"
+            echo ""
+        } >> "$OUTPUT_FILE"
+        continue
+    fi
+    
+    echo "Processing ($COUNTER/$FILE_COUNT): $FILENAME"
+    
+    {
+        echo "================================================================================"
+        echo "FILE: $FILENAME"
+        echo "SIZE: $(echo "scale=2; $FILESIZE/1024" | bc 2>/dev/null || echo "0.00") KB"
+        echo "MODIFIED: $MODIFIED"
+        echo "================================================================================"
+        echo ""
+        cat "$file" 2>/dev/null || echo "[ERROR: Could not read file]"
+        echo ""
+        echo ""
+    } >> "$OUTPUT_FILE"
+    
+done < "$TMPFILE"
+
+# Cleanup
+rm -f "$TMPFILE"
+
+# Summary
+EXPORTED=$((COUNTER - SKIPPED))
+{
+    echo "==============================================================================="
+    echo "EXPORT COMPLETED: $(date)"
+    echo "Total Files Found: $FILE_COUNT"
+    echo "Files Exported: $EXPORTED"
+    echo "Files Skipped: $SKIPPED (binary or large files)"
+    echo "Output File: $PROJECT_PATH/$OUTPUT_FILE"
+    echo "==============================================================================="
+} >> "$OUTPUT_FILE"
+
+# Final output
+OUTPUT_SIZE=$(stat -c%s "$OUTPUT_FILE" 2>/dev/null || stat -f%z "$OUTPUT_FILE" 2>/dev/null || echo "0")
+
+echo ""
+echo "=============================================="
+echo "  Export Complete!"
+echo "=============================================="
+echo ""
+echo "Output file:    $OUTPUT_FILE"
+echo "Files exported: $EXPORTED"
+echo "Files skipped:  $SKIPPED"
+echo "Output size:    $(echo "scale=2; $OUTPUT_SIZE/1024" | bc 2>/dev/null || echo "?") KB"
+echo ""
+echo "File types included:"
+echo "  • Source code: .cs, .fs, .vb"
+echo "  • UI/XAML: .axaml, .xaml, .paml"
+echo "  • Projects: .csproj, .slnx, .sln, .props, .targets"
+echo "  • Config: .json, .yaml, .yml, .xml, .config"
+echo "  • Docs: .md, .txt"
+echo "  • Scripts: .sh, .ps1, .cmd, .bat"
+echo "  • Other: .sql, .resx, .css, .scss, Dockerfile, etc."
+echo ""
+
+
+================================================================================
+FILE: GeminiClientConsole/AppRunner.cs
+SIZE: 16.83 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClientConsole/AppRunner.cs (Console-specific UI component)
+using System.Diagnostics;
+using System.Text;
+using GeminiClient;
+using Microsoft.Extensions.Logging;
+
+namespace GeminiClientConsole;
+
+public class AppRunner(
+    IGeminiApiClient geminiClient,
+    ILogger<AppRunner> logger,
+    ConsoleModelSelector modelSelector)
+{
+    private readonly IGeminiApiClient _geminiClient = geminiClient;
+    private readonly ILogger<AppRunner> _logger = logger;
+    private readonly ConsoleModelSelector _modelSelector = modelSelector;
+    private string? _selectedModel;
+    private readonly List<ResponseMetrics> _sessionMetrics = [];
+    private bool _streamingEnabled = true; // Default to streaming
+
+    public async Task RunAsync()
+    {
+        _logger.LogInformation("Application starting...");
+
+        // Select model at startup
+        _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
+
+        while (true)
+        {
+            Console.WriteLine($"\n📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for session stats, 'stream' to toggle streaming: {(_streamingEnabled ? "ON" : "OFF")}):");
+            Console.Write("> ");
+            string? input = Console.ReadLine();
+
+            if (string.Equals(input, "exit", StringComparison.OrdinalIgnoreCase))
+            {
+                DisplaySessionSummary();
+                Console.WriteLine("\nGoodbye! 👋");
+                break;
+            }
+
+            if (string.Equals(input, "model", StringComparison.OrdinalIgnoreCase))
+            {
+                _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
+                continue;
+            }
+
+            if (string.Equals(input, "stats", StringComparison.OrdinalIgnoreCase))
+            {
+                DisplaySessionSummary();
+                continue;
+            }
+
+            if (string.Equals(input, "stream", StringComparison.OrdinalIgnoreCase))
+            {
+                _streamingEnabled = !_streamingEnabled;
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"✓ Streaming {(_streamingEnabled ? "enabled" : "disabled")}");
+                Console.ResetColor();
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("⚠ Prompt cannot be empty");
+                Console.ResetColor();
+                continue;
+            }
+
+            if (_streamingEnabled)
+            {
+                await ProcessPromptStreamingAsync(input);
+            }
+            else
+            {
+                await ProcessPromptAsync(input);
+            }
+        }
+
+        _logger.LogInformation("Application finished");
+    }
+
+    private async Task ProcessPromptStreamingAsync(string prompt)
+    {
+        try
+        {
+            // Display response header
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine($"\n╭─── Streaming Response ───╮");
+            Console.ResetColor();
+
+            var totalTimer = Stopwatch.StartNew();
+            var responseBuilder = new StringBuilder();
+            bool firstChunkReceived = false;
+
+            await foreach (string chunk in _geminiClient.StreamGenerateContentAsync(_selectedModel!, prompt))
+            {
+                if (!firstChunkReceived)
+                {
+                    firstChunkReceived = true;
+                    // Display first chunk timing
+                    Console.ForegroundColor = ConsoleColor.DarkGreen;
+                    Console.WriteLine($"⚡ First response: {totalTimer.ElapsedMilliseconds}ms");
+                    Console.ResetColor();
+                    Console.WriteLine(); // Add some spacing
+                }
+
+                // Write chunk immediately to console
+                Console.Write(chunk);
+                responseBuilder.Append(chunk);
+            }
+
+            totalTimer.Stop();
+
+            // Add some spacing after the response
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("╰────────────────╯");
+            Console.ResetColor();
+
+            // Calculate and store metrics
+            string completeResponse = responseBuilder.ToString();
+            var metrics = new ResponseMetrics
+            {
+                Model = _selectedModel!,
+                PromptLength = prompt.Length,
+                ResponseLength = completeResponse.Length,
+                ElapsedTime = totalTimer.Elapsed,
+                Timestamp = DateTime.Now
+            };
+
+            _sessionMetrics.Add(metrics);
+
+            // Display performance metrics for streaming
+            DisplayStreamingMetrics(metrics, completeResponse);
+        }
+        catch (HttpRequestException httpEx) when (httpEx.Message.Contains("500"))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n❌ Server Error: The model '{_selectedModel}' is experiencing issues.");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"💡 Tip: Try switching to a different model using the 'model' command.");
+            Console.WriteLine($"   Recommended stable models: gemini-2.5-flash, gemini-2.0-flash");
+            Console.ResetColor();
+
+            _logger.LogError(httpEx, "Server error from Gemini API");
+        }
+        catch (HttpRequestException httpEx)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n❌ Network Error: {httpEx.Message}");
+            Console.ResetColor();
+
+            _logger.LogError(httpEx, "HTTP error during content generation");
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"\n❌ Unexpected Error: {ex.Message}");
+            Console.ResetColor();
+
+            _logger.LogError(ex, "Error during content generation");
+        }
+    }
+
+    private async Task ProcessPromptAsync(string prompt)
+    {
+        Task? animationTask = null;
+        try
+        {
+            // Display sending message with animation
+            animationTask = ShowProgressAnimation();
+
+            // Start timing
+            var totalTimer = Stopwatch.StartNew();
+
+            string? result = await _geminiClient.GenerateContentAsync(_selectedModel!, prompt);
+
+            // Stop timing and animation
+            totalTimer.Stop();
+            _isAnimating = false;
+            if (animationTask != null) await animationTask;
+
+            // Clear the animation line
+            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+
+            if (result != null)
+            {
+                var metrics = new ResponseMetrics
+                {
+                    Model = _selectedModel!,
+                    PromptLength = prompt.Length,
+                    ResponseLength = result.Length,
+                    ElapsedTime = totalTimer.Elapsed,
+                    Timestamp = DateTime.Now
+                };
+
+                _sessionMetrics.Add(metrics);
+
+                DisplayResponse(result, metrics);
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"⚠ No response received (took {FormatElapsedTime(totalTimer.Elapsed)})");
+                Console.ResetColor();
+            }
+        }
+        catch (HttpRequestException httpEx) when (httpEx.Message.Contains("500"))
+        {
+            // Stop animation immediately
+            _isAnimating = false;
+            if (animationTask != null) await animationTask;
+            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"❌ Server Error: The model '{_selectedModel}' is experiencing issues.");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"💡 Tip: Try switching to a different model using the 'model' command.");
+            Console.WriteLine($"   Recommended stable models: gemini-2.5-flash, gemini-2.0-flash");
+            Console.ResetColor();
+
+            _logger.LogError(httpEx, "Server error from Gemini API");
+        }
+        catch (HttpRequestException httpEx)
+        {
+            // Stop animation immediately
+            _isAnimating = false;
+            if (animationTask != null) await animationTask;
+            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"❌ Network Error: {httpEx.Message}");
+            Console.ResetColor();
+
+            _logger.LogError(httpEx, "HTTP error during content generation");
+        }
+        catch (Exception ex)
+        {
+            // Stop animation immediately
+            _isAnimating = false;
+            if (animationTask != null) await animationTask;
+            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"❌ Unexpected Error: {ex.Message}");
+            Console.ResetColor();
+
+            _logger.LogError(ex, "Error during content generation");
+        }
+    }
+
+    private bool _isAnimating = false;
+
+    private async Task ShowProgressAnimation()
+    {
+        _isAnimating = true;
+        string[] spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        int spinnerIndex = 0;
+        DateTime startTime = DateTime.Now;
+
+        while (_isAnimating)
+        {
+            TimeSpan elapsed = DateTime.Now - startTime;
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.Write($"\r{spinner[spinnerIndex]} Generating response... [{elapsed:mm\\:ss\\.ff}]");
+            Console.ResetColor();
+            spinnerIndex = (spinnerIndex + 1) % spinner.Length;
+            await Task.Delay(100);
+        }
+    }
+
+    private void DisplayResponse(string response, ResponseMetrics metrics)
+    {
+        // Calculate metrics
+        int wordCount = response.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        double tokensPerSecond = EstimateTokens(response) / Math.Max(metrics.ElapsedTime.TotalSeconds, 0.001);
+
+        // Display response header with timing
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine($"\n╭─── Response ─── ⏱ {FormatElapsedTime(metrics.ElapsedTime)} ───╮");
+        Console.ResetColor();
+
+        // Display the actual response
+        Console.WriteLine(response);
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("╰────────────────╯");
+        Console.ResetColor();
+
+        // Display performance metrics
+        DisplayMetrics(metrics, wordCount, tokensPerSecond);
+    }
+
+    private void DisplayStreamingMetrics(ResponseMetrics metrics, string response)
+    {
+        int wordCount = response.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+        double tokensPerSecond = EstimateTokens(response) / Math.Max(metrics.ElapsedTime.TotalSeconds, 0.001);
+
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"📊 Streaming Performance Metrics:");
+
+        string speedBar = CreateSpeedBar(tokensPerSecond);
+
+        Console.WriteLine($"   └─ Total Time: {FormatElapsedTime(metrics.ElapsedTime)}");
+        Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
+        Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
+        Console.WriteLine($"   └─ Mode: 🌊 Streaming (real-time)");
+
+        // Compare with session average if we have enough data
+        if (_sessionMetrics.Count > 1)
+        {
+            var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
+            string comparison = metrics.ElapsedTime < avgTime ? "🟢 faster" : "🔴 slower";
+            Console.WriteLine($"   └─ Session Avg: {FormatElapsedTime(avgTime)} ({comparison})");
+        }
+
+        Console.ResetColor();
+    }
+
+    private void DisplayMetrics(ResponseMetrics metrics, int wordCount, double tokensPerSecond)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkGray;
+        Console.WriteLine($"📊 Performance Metrics:");
+
+        // Create a simple bar chart for visual representation
+        string speedBar = CreateSpeedBar(tokensPerSecond);
+
+        Console.WriteLine($"   └─ Response Time: {FormatElapsedTime(metrics.ElapsedTime)}");
+        Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
+        Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
+
+        // Compare with session average if we have enough data
+        if (_sessionMetrics.Count > 1)
+        {
+            var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
+            string comparison = metrics.ElapsedTime < avgTime ? "🟢 faster" : "🔴 slower";
+            Console.WriteLine($"   └─ Session Avg: {FormatElapsedTime(avgTime)} ({comparison})");
+        }
+
+        Console.ResetColor();
+    }
+
+    private static string CreateSpeedBar(double tokensPerSecond)
+    {
+        // Create a simple visual speed indicator
+        int barLength = Math.Min((int)(tokensPerSecond / 10), 10);
+        string bar = new string('█', barLength) + new string('░', 10 - barLength);
+
+        string speedRating = tokensPerSecond switch
+        {
+            < 10 => "🐌",
+            < 30 => "🚶",
+            < 50 => "🏃",
+            < 100 => "🚀",
+            _ => "⚡"
+        };
+
+        return $"[{bar}] {speedRating}";
+    }
+
+    private void DisplaySessionSummary()
+    {
+        if (_sessionMetrics.Count == 0)
+        {
+            Console.WriteLine("\n📈 No requests made yet in this session.");
+            return;
+        }
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("\n╔═══ Session Statistics ═══╗");
+        Console.ResetColor();
+
+        int totalRequests = _sessionMetrics.Count;
+        var avgResponseTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
+        TimeSpan minResponseTime = _sessionMetrics.Min(m => m.ElapsedTime);
+        TimeSpan maxResponseTime = _sessionMetrics.Max(m => m.ElapsedTime);
+        int totalChars = _sessionMetrics.Sum(m => m.ResponseLength);
+        TimeSpan sessionDuration = DateTime.Now - _sessionMetrics.First().Timestamp;
+
+        Console.WriteLine($"  📊 Total Requests: {totalRequests}");
+        Console.WriteLine($"  ⏱  Average Response: {FormatElapsedTime(avgResponseTime)}");
+        Console.WriteLine($"  🚀 Fastest: {FormatElapsedTime(minResponseTime)}");
+        Console.WriteLine($"  🐌 Slowest: {FormatElapsedTime(maxResponseTime)}");
+        Console.WriteLine($"  📝 Total Output: {totalChars:N0} characters");
+        Console.WriteLine($"  ⏰ Session Duration: {FormatElapsedTime(sessionDuration)}");
+        Console.WriteLine($"  🌊 Streaming: {(_streamingEnabled ? "Enabled" : "Disabled")}");
+
+        // Show model usage breakdown
+        var modelUsage = _sessionMetrics.GroupBy(m => m.Model)
+            .Select(g => new { Model = g.Key, Count = g.Count(), AvgTime = g.Average(m => m.ElapsedTime.TotalSeconds) })
+            .OrderByDescending(m => m.Count);
+
+        Console.WriteLine("\n  🤖 Models Used:");
+        foreach (var usage in modelUsage)
+        {
+            Console.WriteLine($"     └─ {usage.Model}: {usage.Count} requests (avg {usage.AvgTime:F2}s)");
+        }
+
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("╚════════════════════════╝");
+        Console.ResetColor();
+    }
+
+    private static string FormatElapsedTime(TimeSpan elapsed)
+    {
+        if (elapsed.TotalMilliseconds < 1000)
+        {
+            return $"{elapsed.TotalMilliseconds:F0}ms";
+        }
+        else if (elapsed.TotalSeconds < 60)
+        {
+            return $"{elapsed.TotalSeconds:F2}s";
+        }
+        else
+        {
+            return $"{elapsed.Minutes}m {elapsed.Seconds:D2}s";
+        }
+    }
+
+    private static int EstimateTokens(string text)
+    {
+        // Rough estimation: ~1 token per 4 characters
+        return text.Length / 4;
+    }
+
+    private static int EstimateTokens(int charCount)
+    {
+        return charCount / 4;
+    }
+
+    private class ResponseMetrics
+    {
+        public string Model { get; set; } = string.Empty;
+        public int PromptLength { get; set; }
+        public int ResponseLength { get; set; }
+        public TimeSpan ElapsedTime { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+}
+
+
+================================================================================
+FILE: GeminiClientConsole/appsettings.json
+SIZE: .45 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+{
+    "Logging": {
+        "LogLevel": {
+            "Default": "Warning",
+            "Microsoft.Hosting.Lifetime": "Information",
+            "GeminiClient": "Warning",
+            "GeminiClientConsole.ModelSelector": "Information"
+        }
+    },
+    "AllowedHosts": "*",
+    "GeminiSettings": {
+        "ApiKey": "YOUR_GEMINI_API_KEY_FROM_CONFIG",
+        "BaseUrl": "https://generativelanguage.googleapis.com/",
+        "DefaultModel": "gemini-2.5-flash"
+    }
+}
+
+
+================================================================================
+FILE: GeminiClientConsole/ConsoleModelSelector.cs
+SIZE: 7.75 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClientConsole/ConsoleModelSelector.cs (Console-specific UI component)
+using GeminiClient;
+using Microsoft.Extensions.Logging;
+
+namespace GeminiClientConsole;
+
+public class ConsoleModelSelector
+{
+    private readonly IGeminiApiClient _geminiClient;
+    private readonly ILogger<ConsoleModelSelector> _logger;
+    private readonly Dictionary<string, string> _availableModels;
+
+    public ConsoleModelSelector(IGeminiApiClient geminiClient, ILogger<ConsoleModelSelector> logger)
+    {
+        _geminiClient = geminiClient;
+        _logger = logger;
+
+        // Define available models with descriptions
+        _availableModels = new Dictionary<string, string>
+        {
+            { "gemini-2.5-flash", "Latest Gemini 2.5 Flash - Fast and efficient" },
+            { "gemini-2.0-flash-exp", "Experimental Gemini 2.0 Flash - Cutting edge features" },
+            { "gemini-2.0-flash", "Gemini 2.0 Flash - Balanced performance" },
+            { "gemini-1.5-pro", "Gemini 1.5 Pro - High capability model" },
+            { "gemini-1.5-flash", "Gemini 1.5 Flash - Fast and reliable" }
+        };
+    }
+
+    public async Task<string> SelectModelInteractivelyAsync()
+    {
+        // Show loading animation while fetching model availability
+        Task loadingTask = ShowModelLoadingAnimationAsync();
+
+        // Validate model availability in parallel (simulate API call)
+        Dictionary<string, string> availableModels = await ValidateModelAvailabilityAsync();
+
+        // Stop loading animation
+        _isLoadingModels = false;
+        await loadingTask;
+
+        // Clear loading line
+        Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+
+        Console.WriteLine("🤖 Available Gemini Models:");
+        Console.WriteLine("═══════════════════════════");
+
+        var modelList = availableModels.ToList();
+
+        // Animate model list display
+        for (int i = 0; i < modelList.Count; i++)
+        {
+            KeyValuePair<string, string> model = modelList[i];
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.Write($"  [{i + 1}] ");
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write(model.Key);
+            Console.ResetColor();
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.WriteLine($" - {model.Value}");
+            Console.ResetColor();
+
+            // Small delay for smooth animation
+            await Task.Delay(50);
+        }
+
+        while (true)
+        {
+            Console.WriteLine();
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write($"Select a model (1-{modelList.Count}) or press Enter for default [{modelList[0].Key}]: ");
+            Console.ResetColor();
+
+            // Use async console reading with timeout and cancellation support
+            string? input = await ReadLineWithTimeoutAsync(TimeSpan.FromMinutes(5));
+
+            // Default selection (first model)
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                string defaultModel = modelList[0].Key;
+                await ShowSelectionConfirmationAsync(defaultModel, isDefault: true);
+                _logger.LogInformation("Model selected: {Model} (default)", defaultModel);
+                return defaultModel;
+            }
+
+            // Parse user input
+            if (int.TryParse(input.Trim(), out int selection) &&
+                selection >= 1 && selection <= modelList.Count)
+            {
+                string selectedModel = modelList[selection - 1].Key;
+                await ShowSelectionConfirmationAsync(selectedModel, isDefault: false);
+                _logger.LogInformation("Model selected: {Model}", selectedModel);
+                return selectedModel;
+            }
+
+            // Invalid input with animated error message
+            await ShowErrorMessageAsync($"❌ Invalid selection. Please choose a number between 1 and {modelList.Count}.");
+        }
+    }
+
+    private bool _isLoadingModels = false;
+
+    private async Task ShowModelLoadingAnimationAsync()
+    {
+        _isLoadingModels = true;
+        string[] frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        int frameIndex = 0;
+
+        while (_isLoadingModels)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkCyan;
+            Console.Write($"\r{frames[frameIndex]} Checking model availability...");
+            Console.ResetColor();
+            frameIndex = (frameIndex + 1) % frames.Length;
+            await Task.Delay(100);
+        }
+    }
+
+    private async Task<Dictionary<string, string>> ValidateModelAvailabilityAsync()
+    {
+        // Simulate checking model availability with the API
+        // In a real implementation, you might check which models are actually available
+        await Task.Delay(1500); // Simulate API call delay
+
+        // For now, return the static list, but this could be dynamic
+        var availableModels = new Dictionary<string, string>(_availableModels);
+
+        // You could add real validation here:
+        // - Check quota limits
+        // - Verify model accessibility
+        // - Get real-time model status
+
+        return availableModels;
+    }
+
+    private static async Task<string?> ReadLineWithTimeoutAsync(TimeSpan timeout)
+    {
+        Task<string?> readTask = Task.Run(() => Console.ReadLine());
+        var timeoutTask = Task.Delay(timeout);
+
+        Task completedTask = await Task.WhenAny(readTask, timeoutTask);
+
+        if (completedTask == timeoutTask)
+        {
+            Console.WriteLine("\n⏰ Selection timeout - using default model.");
+            return null; // Will trigger default selection
+        }
+
+        return await readTask;
+    }
+
+    private static async Task ShowSelectionConfirmationAsync(string modelName, bool isDefault)
+    {
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.Write("✓ Selected: ");
+        Console.ResetColor();
+
+        // Animate the model name appearing character by character
+        foreach (char c in modelName)
+        {
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.Write(c);
+            await Task.Delay(30);
+        }
+
+        if (isDefault)
+        {
+            Console.ForegroundColor = ConsoleColor.DarkGray;
+            Console.Write(" (default)");
+        }
+
+        Console.ResetColor();
+        Console.WriteLine();
+
+        // Small celebration animation
+        await Task.Delay(200);
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("🎉 Ready to go!");
+        Console.ResetColor();
+        await Task.Delay(300);
+    }
+
+    private static async Task ShowErrorMessageAsync(string message)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+
+        // Flash the error message
+        for (int i = 0; i < 3; i++)
+        {
+            Console.Write("\r" + message);
+            await Task.Delay(200);
+            Console.Write("\r" + new string(' ', message.Length));
+            await Task.Delay(100);
+        }
+
+        Console.WriteLine("\r" + message);
+        Console.ResetColor();
+        await Task.Delay(500);
+    }
+
+    public void DisplayCurrentModel(string modelName)
+    {
+        Console.ForegroundColor = ConsoleColor.DarkCyan;
+        Console.WriteLine($"🤖 Current Model: {modelName}");
+
+        if (_availableModels.TryGetValue(modelName, out string? description))
+        {
+            Console.WriteLine($"   {description}");
+        }
+
+        Console.ResetColor();
+    }
+
+    public List<string> GetAvailableModels()
+    {
+        return [.. _availableModels.Keys];
+    }
+
+    public string GetModelDescription(string modelName)
+    {
+        return _availableModels.TryGetValue(modelName, out string? description)
+            ? description
+            : "Unknown model";
+    }
+}
+
+
+================================================================================
+FILE: GeminiClientConsole/GeminiClientConsole.csproj
+SIZE: 1.53 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿<!-- GeminiClientConsole/GeminiClientConsole.csproj -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UserSecretsId>7714c600-ea4f-40d4-adc2-dd0601bd3b71</UserSecretsId>
+   
+    <!-- Assembly Information -->
+    <AssemblyName>GeminiClientConsole</AssemblyName>
+    <RootNamespace>GeminiClientConsole</RootNamespace>
+   
+    <!-- Publishing Configuration -->
+    <PublishAot>false</PublishAot> <!-- Set to true if you want AOT compilation -->
+   
+    <!-- Package Information -->
+    <Product>Gemini Client Console</Product>
+    <Description>Interactive console client for Google Gemini AI API with real-time streaming</Description>
+  </PropertyGroup>
+ 
+  <ItemGroup>
+    <None Remove="appsettings.json" />
+  </ItemGroup>
+ 
+  <ItemGroup>
+    <Content Include="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+ 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.8" />
+  </ItemGroup>
+ 
+  <ItemGroup>
+    <ProjectReference Include="..\GeminiClient\GeminiClient.csproj" />
+  </ItemGroup>
+  
+  <!-- Trimming Configuration -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="GeminiClientConsole" />
+    <TrimmerRootAssembly Include="GeminiClient" />
+  </ItemGroup>
+</Project>
+
+
+================================================================================
+FILE: GeminiClientConsole/Program.cs
+SIZE: 2.26 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿using GeminiClient;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+
+namespace GeminiClientConsole;
+
+public class Program
+{
+    private const string GeminiConfigSectionName = "GeminiSettings";
+
+    public static async Task Main(string[] args)
+    {
+        IHost host = Host.CreateDefaultBuilder(args)
+            .ConfigureAppConfiguration((hostingContext, config) =>
+            {
+                config.SetBasePath(AppContext.BaseDirectory);
+            })
+            .ConfigureServices((context, services) =>
+            {
+                IConfigurationSection geminiConfigSection = context.Configuration.GetSection(GeminiConfigSectionName);
+
+                if (!geminiConfigSection.Exists())
+                {
+                    Console.Error.WriteLine($"Configuration section '{GeminiConfigSectionName}' not found. Please check appsettings.json, user secrets, or environment variables.");
+                }
+
+                // Register library services (includes IModelService)
+                _ = services.AddGeminiApiClient(geminiConfigSection);
+
+                // Register console-specific services
+                _ = services.AddTransient<ConsoleModelSelector>();
+                _ = services.AddTransient<AppRunner>();
+            })
+            .Build();
+
+        try
+        {
+            AppRunner runner = host.Services.GetRequiredService<AppRunner>();
+            await runner.RunAsync();
+        }
+        catch (OptionsValidationException ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine($"ERROR: Configuration validation failed.");
+            foreach (string failure in ex.Failures)
+            {
+                Console.Error.WriteLine($"- {failure}");
+            }
+            Console.ResetColor();
+            Console.WriteLine($"Please check your configuration and ensure required values are set.");
+            Environment.Exit(1);
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.Error.WriteLine($"ERROR: Application startup failed. {ex.Message}");
+            Console.ResetColor();
+            Environment.Exit(2);
+        }
+    }
+}
+
+
+================================================================================
+FILE: GeminiClient/GeminiApiClient.cs
+SIZE: 8.09 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/GeminiApiClient.cs (Updated for streaming support)
+using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json;
+using System.Web;
+using GeminiClient.Models;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace GeminiClient;
+
+public class GeminiApiClient : IGeminiApiClient
+{
+    private readonly HttpClient _httpClient;
+    private readonly GeminiApiOptions _options;
+    private readonly ILogger<GeminiApiClient> _logger;
+
+    public GeminiApiClient(HttpClient httpClient, IOptions<GeminiApiOptions> options, ILogger<GeminiApiClient> logger)
+    {
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        if (string.IsNullOrWhiteSpace(_options.ApiKey))
+        {
+            throw new ArgumentException("ApiKey is missing in GeminiApiOptions.");
+        }
+        if (string.IsNullOrWhiteSpace(_options.BaseUrl))
+        {
+            throw new ArgumentException("BaseUrl is missing in GeminiApiOptions.");
+        }
+    }
+
+    public async Task<string?> GenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+
+        string? apiKey = _options.ApiKey;
+        string path = $"/v1beta/models/{modelName}:generateContent";
+        var uriBuilder = new UriBuilder(_httpClient.BaseAddress!)
+        {
+            Path = path,
+            Query = $"key={HttpUtility.UrlEncode(apiKey)}"
+        };
+        Uri requestUri = uriBuilder.Uri;
+
+        var requestBody = new GeminiRequest
+        {
+            Contents = [new Content { Parts = [new Part { Text = prompt }] }]
+        };
+
+        _logger.LogInformation("Sending request to Gemini API: {Uri}", requestUri);
+
+        try
+        {
+            string jsonString = JsonSerializer.Serialize(requestBody, GeminiJsonContext.Default.GeminiRequest);
+            using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
+
+            using HttpResponseMessage response = await _httpClient.PostAsync(requestUri, jsonContent, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Gemini API request failed with status code {StatusCode}. Response: {ErrorContent}",
+                    response.StatusCode, errorContent);
+                _ = response.EnsureSuccessStatusCode();
+            }
+
+            string responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            GeminiResponse? geminiResponse = JsonSerializer.Deserialize(responseJson, GeminiJsonContext.Default.GeminiResponse);
+
+            string? generatedText = geminiResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
+            _logger.LogInformation("Successfully received response from Gemini API.");
+            return generatedText;
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request error calling Gemini API.");
+            throw;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Error deserializing Gemini API response.");
+            throw new InvalidOperationException("Failed to deserialize Gemini API response.", ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unexpected error occurred while calling Gemini API.");
+            throw;
+        }
+    }
+
+    public async IAsyncEnumerable<string> StreamGenerateContentAsync(
+        string modelName,
+        string prompt,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+
+        string? apiKey = _options.ApiKey;
+        string path = $"/v1beta/models/{modelName}:streamGenerateContent";
+        var uriBuilder = new UriBuilder(_httpClient.BaseAddress!)
+        {
+            Path = path,
+            Query = $"key={HttpUtility.UrlEncode(apiKey)}&alt=sse" // Request SSE format
+        };
+        Uri requestUri = uriBuilder.Uri;
+
+        var requestBody = new GeminiRequest
+        {
+            Contents = [new Content { Parts = [new Part { Text = prompt }] }]
+        };
+
+        _logger.LogInformation("Sending streaming request to Gemini API: {Uri}", requestUri);
+
+        // Setup the request - handle errors before yielding
+        HttpResponseMessage response;
+        Stream stream;
+        StreamReader reader;
+
+        string jsonString = JsonSerializer.Serialize(requestBody, GeminiJsonContext.Default.GeminiRequest);
+        using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
+        {
+            Content = jsonContent
+        };
+
+        // Add SSE headers
+        request.Headers.Accept.Clear();
+        request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
+        request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+
+        try
+        {
+            response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Gemini API streaming request failed with status code {StatusCode}. Response: {ErrorContent}",
+                    response.StatusCode, errorContent);
+                response.EnsureSuccessStatusCode();
+            }
+
+            stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            reader = new StreamReader(stream);
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "HTTP request error calling Gemini API streaming endpoint.");
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "An unexpected error occurred while streaming from Gemini API.");
+            throw;
+        }
+
+        // Process SSE stream - no try-catch around yield statements
+        using (response)
+        using (stream)
+        using (reader)
+        {
+            string? line;
+            while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
+            {
+                // Skip empty lines and comments
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith(':'))
+                    continue;
+
+                // Parse SSE format: "data: {json}"
+                if (line.StartsWith("data: "))
+                {
+                    string jsonData = line.Substring(6); // Remove "data: " prefix
+
+                    // Check for end of stream
+                    if (jsonData == "[DONE]")
+                        break;
+
+                    // Parse JSON and extract text chunk
+                    string? textChunk = null;
+                    try
+                    {
+                        GeminiResponse? streamResponse = JsonSerializer.Deserialize(jsonData, GeminiJsonContext.Default.GeminiResponse);
+                        textChunk = streamResponse?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
+                    }
+                    catch (JsonException ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to parse SSE data: {JsonData}", jsonData);
+                        continue; // Skip this chunk and continue
+                    }
+
+                    if (!string.IsNullOrEmpty(textChunk))
+                    {
+                        yield return textChunk;
+                    }
+                }
+            }
+        }
+
+        _logger.LogInformation("Successfully completed streaming from Gemini API.");
+    }
+}
+
+
+================================================================================
+FILE: GeminiClient/GeminiApiException.cs
+SIZE: .28 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/GeminiApiException.cs
+namespace GeminiClient;
+
+public class GeminiApiException : Exception
+{
+    public GeminiApiException(string message) : base(message) { }
+    public GeminiApiException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+
+================================================================================
+FILE: GeminiClient/GeminiApiOptions.cs
+SIZE: 1.71 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/GeminiApiOptions.cs
+using System.ComponentModel.DataAnnotations;
+
+namespace GeminiClient;
+
+/// <summary>
+/// Configuration options for the Gemini API client.
+/// </summary>
+public class GeminiApiOptions
+{
+    /// <summary>
+    /// The base URL for the Gemini API.
+    /// Default: https://generativelanguage.googleapis.com/
+    /// </summary>
+    [Required(AllowEmptyStrings = false, ErrorMessage = "BaseUrl is required")]
+    [Url(ErrorMessage = "BaseUrl must be a valid URL")]
+    public string? BaseUrl { get; set; }
+
+    /// <summary>
+    /// The API key for authenticating with the Gemini API.
+    /// </summary>
+    [Required(AllowEmptyStrings = false, ErrorMessage = "ApiKey is required")]
+    public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// Optional: Default model to use if none is specified.
+    /// </summary>
+    public string? DefaultModel { get; set; }
+
+    /// <summary>
+    /// Optional: Model selection preference for automatic selection.
+    /// </summary>
+    public string? ModelPreference { get; set; }
+
+    /// <summary>
+    /// Optional: Timeout in seconds for API requests.
+    /// Default: 30 seconds
+    /// </summary>
+    [Range(1, 300, ErrorMessage = "Timeout must be between 1 and 300 seconds")]
+    public int TimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Optional: Maximum number of retries for failed requests.
+    /// Default: 3
+    /// </summary>
+    [Range(0, 10, ErrorMessage = "MaxRetries must be between 0 and 10")]
+    public int MaxRetries { get; set; } = 3;
+
+    /// <summary>
+    /// Optional: Whether to enable detailed logging of API requests and responses.
+    /// Default: false
+    /// </summary>
+    public bool EnableDetailedLogging { get; set; } = false;
+}
+
+
+================================================================================
+FILE: GeminiClient/GeminiApiOptionsValidator.cs
+SIZE: 1.14 KB
+MODIFIED: 2025-12-24 13:20:31
+================================================================================
+
+// GeminiClient/GeminiApiOptionsValidator.cs (New file for manual validation)
+using Microsoft.Extensions.Options;
+
+namespace GeminiClient;
+
+public class GeminiApiOptionsValidator : IValidateOptions<GeminiApiOptions>
+{
+    public ValidateOptionsResult Validate(string? name, GeminiApiOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.ApiKey))
+        {
+            return ValidateOptionsResult.Fail("ApiKey is required");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.BaseUrl))
+        {
+            return ValidateOptionsResult.Fail("BaseUrl is required");
+        }
+
+        if (!Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out _))
+        {
+            return ValidateOptionsResult.Fail("BaseUrl must be a valid URL");
+        }
+
+        if (options.TimeoutSeconds < 1 || options.TimeoutSeconds > 300)
+        {
+            return ValidateOptionsResult.Fail("TimeoutSeconds must be between 1 and 300");
+        }
+
+        if (options.MaxRetries < 0 || options.MaxRetries > 10)
+        {
+            return ValidateOptionsResult.Fail("MaxRetries must be between 0 and 10");
+        }
+
+        return ValidateOptionsResult.Success;
+    }
+}
+
+
+================================================================================
+FILE: GeminiClient/GeminiClient.csproj
+SIZE: .99 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿<!-- GeminiClient/GeminiClient.csproj -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <UserSecretsId>2e219e2a-064a-457d-976e-4eb51c38711a</UserSecretsId>
+   
+    <!-- Assembly Information -->
+    <AssemblyName>GeminiClient</AssemblyName>
+    <RootNamespace>GeminiClient</RootNamespace>
+   
+    <!-- Library Configuration -->
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+   
+    <!-- Package Information -->
+    <Product>Gemini Client Library</Product>
+    <Description>Client library for Google Gemini AI API with streaming support</Description>
+  </PropertyGroup>
+ 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Configuration" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.8" />
+  </ItemGroup>
+</Project>
+
+
+================================================================================
+FILE: GeminiClient/IGeminiApiClient.cs
+SIZE: 1.62 KB
+MODIFIED: 2025-12-24 13:20:31
+================================================================================
+
+﻿// GeminiClient/IGeminiApiClient.cs
+namespace GeminiClient;
+
+public interface IGeminiApiClient
+{
+    /// <summary>
+    /// Generates content using the specified Gemini model and prompt.
+    /// </summary>
+    /// <param name="modelName">The name of the model (e.g., "gemini-2.0-flash").</param>
+    /// <param name="prompt">The text prompt for content generation.</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>The generated text content or null if no content was generated.</returns>
+    /// <exception cref="HttpRequestException">Thrown if the API request fails.</exception>
+    /// <exception cref="ArgumentException">Thrown if required configuration is missing.</exception>
+    Task<string?> GenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates content using streaming, yielding text chunks as they arrive.
+    /// </summary>
+    /// <param name="modelName">The name of the model (e.g., "gemini-2.0-flash").</param>
+    /// <param name="prompt">The text prompt for content generation.</param>
+    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
+    /// <returns>An async enumerable of text chunks as they're generated.</returns>
+    /// <exception cref="HttpRequestException">Thrown if the API request fails.</exception>
+    /// <exception cref="ArgumentException">Thrown if required configuration is missing.</exception>
+    IAsyncEnumerable<string> StreamGenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default);
+}
+
+
+================================================================================
+FILE: GeminiClient/IModelService.cs
+SIZE: .99 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/IModelService.cs
+using GeminiClient.Models;
+
+namespace GeminiClient;
+
+public interface IModelService
+{
+    /// <summary>
+    /// Retrieves all available Gemini models from the API.
+    /// </summary>
+    Task<IReadOnlyList<GeminiModel>> GetAvailableModelsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets models filtered by capability.
+    /// </summary>
+    Task<IReadOnlyList<GeminiModel>> GetModelsByCapabilityAsync(
+        ModelCapability capability,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds a specific model by name.
+    /// </summary>
+    Task<GeminiModel?> GetModelAsync(string modelName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the recommended default model based on specified criteria.
+    /// </summary>
+    Task<GeminiModel?> GetRecommendedModelAsync(
+        ModelSelectionCriteria? criteria = null,
+        CancellationToken cancellationToken = default);
+}
+
+
+================================================================================
+FILE: GeminiClient/JsonSerializerContext.cs
+SIZE: 1.08 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+// GeminiClient/JsonSerializerContext.cs
+using System.Text.Json.Serialization;
+using GeminiClient.Models;
+
+namespace GeminiClient;
+
+/// <summary>
+/// Source generation context for JSON serialization to support AOT and trimming.
+/// </summary>
+[JsonSourceGenerationOptions(
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    WriteIndented = false,
+    PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(GeminiRequest))]
+[JsonSerializable(typeof(GeminiResponse))]
+[JsonSerializable(typeof(Content))]
+[JsonSerializable(typeof(Part))]
+[JsonSerializable(typeof(Candidate))]
+[JsonSerializable(typeof(SafetyRating))]
+[JsonSerializable(typeof(ModelsListResponse))]
+[JsonSerializable(typeof(GeminiModel))]
+[JsonSerializable(typeof(List<GeminiModel>))]
+[JsonSerializable(typeof(List<Content>))]
+[JsonSerializable(typeof(List<Part>))]
+[JsonSerializable(typeof(List<Candidate>))]
+[JsonSerializable(typeof(List<SafetyRating>))]
+[JsonSerializable(typeof(List<string>))]
+internal partial class GeminiJsonContext : JsonSerializerContext
+{
+}
+
+
+================================================================================
+FILE: GeminiClient/ModelService.cs
+SIZE: 7.56 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/ModelService.cs (Updated for trim-safe serialization)
+using System.Text.Json;
+using GeminiClient.Models;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace GeminiClient;
+
+public class ModelService(
+    HttpClient httpClient,
+    IOptions<GeminiApiOptions> options,
+    ILogger<ModelService> logger,
+    IMemoryCache cache) : IModelService
+{
+    private readonly HttpClient _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+    private readonly GeminiApiOptions _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly ILogger<ModelService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IMemoryCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+    private const string CacheKey = "gemini_models_list";
+    private readonly TimeSpan _cacheExpiration = TimeSpan.FromHours(1);
+
+    public async Task<IReadOnlyList<GeminiModel>> GetAvailableModelsAsync(CancellationToken cancellationToken = default)
+    {
+        // Check cache first
+        if (_cache.TryGetValue<List<GeminiModel>>(CacheKey, out List<GeminiModel>? cachedModels) && cachedModels != null)
+        {
+            _logger.LogDebug("Returning cached models list");
+            return cachedModels.AsReadOnly();
+        }
+
+        try
+        {
+            string requestUrl = $"{_options.BaseUrl?.TrimEnd('/')}/v1beta/models?key={_options.ApiKey}";
+
+            _logger.LogInformation("Fetching models list from Gemini API");
+
+            HttpResponseMessage response = await _httpClient.GetAsync(requestUrl, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            // Trim-safe deserialization using source-generated context
+            string responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
+            ModelsListResponse? modelsResponse = JsonSerializer.Deserialize(responseJson, GeminiJsonContext.Default.ModelsListResponse);
+
+            List<GeminiModel> models = modelsResponse?.Models ?? [];
+
+            // Cache the results
+            _cache.Set(CacheKey, models, _cacheExpiration);
+
+            _logger.LogInformation("Successfully fetched {Count} models", models.Count);
+
+            return models.AsReadOnly();
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.LogError(ex, "Failed to fetch models from Gemini API");
+            throw new GeminiApiException("Failed to retrieve available models", ex);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to deserialize models response");
+            throw new GeminiApiException("Invalid response format from models API", ex);
+        }
+    }
+
+    // ... rest of ModelService implementation remains the same ...
+
+    public async Task<IReadOnlyList<GeminiModel>> GetModelsByCapabilityAsync(
+        ModelCapability capability,
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<GeminiModel> allModels = await GetAvailableModelsAsync(cancellationToken);
+
+        string capabilityString = capability switch
+        {
+            ModelCapability.TextGeneration => "generateContent",
+            ModelCapability.CodeGeneration => "generateCode",
+            ModelCapability.ChatCompletion => "generateContent",
+            _ => throw new ArgumentException($"Unknown capability: {capability}")
+        };
+
+        return allModels
+            .Where(m => m.SupportedGenerationMethods?.Contains(capabilityString) == true)
+            .ToList()
+            .AsReadOnly();
+    }
+
+    public async Task<GeminiModel?> GetModelAsync(string modelName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(modelName))
+            throw new ArgumentException("Model name cannot be empty", nameof(modelName));
+
+        IReadOnlyList<GeminiModel> models = await GetAvailableModelsAsync(cancellationToken);
+
+        return models.FirstOrDefault(m =>
+            m.Name?.EndsWith(modelName, StringComparison.OrdinalIgnoreCase) == true ||
+            m.Name?.Equals($"models/{modelName}", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    public async Task<GeminiModel?> GetRecommendedModelAsync(
+        ModelSelectionCriteria? criteria = null,
+        CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<GeminiModel> models = await GetAvailableModelsAsync(cancellationToken);
+
+        if (!models.Any())
+            return null;
+
+        criteria ??= ModelSelectionCriteria.Default;
+
+        // Filter out models with null names first (they're unusable)
+        IEnumerable<GeminiModel> filtered = models.Where(m => !string.IsNullOrWhiteSpace(m.Name));
+
+        // Filter out known problematic models
+        string[] problematicModels = ["learnlm", "experimental", "preview"];
+        if (criteria.PreferStable)
+        {
+            filtered = filtered.Where(m =>
+                !problematicModels.Any(p => m.Name!.Contains(p, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        // Apply filters based on criteria
+        if (criteria.RequiredCapability.HasValue)
+        {
+            IReadOnlyList<GeminiModel> capableModels = await GetModelsByCapabilityAsync(criteria.RequiredCapability.Value, cancellationToken);
+            var capableModelNames = new HashSet<string>(capableModels.Select(m => m.Name).Where(n => n != null)!);
+            filtered = filtered.Where(m => capableModelNames.Contains(m.Name!));
+        }
+
+        if (criteria.MinInputTokens.HasValue)
+        {
+            filtered = filtered.Where(m => m.InputTokenLimit >= criteria.MinInputTokens.Value);
+        }
+
+        if (criteria.MinOutputTokens.HasValue)
+        {
+            filtered = filtered.Where(m => m.OutputTokenLimit >= criteria.MinOutputTokens.Value);
+        }
+
+        // Prioritize based on preference (Name is guaranteed non-null here due to initial filter)
+        return criteria.Preference switch
+        {
+            ModelPreference.Fastest => filtered
+                .Where(m => m.Name!.Contains("flash", StringComparison.OrdinalIgnoreCase))
+                .Where(m => !m.Name!.Contains("preview", StringComparison.OrdinalIgnoreCase) &&
+                           !m.Name!.Contains("experimental", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(m => m.Name!.Contains("2.5", StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(m => m.Name!.Contains("2.0", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault() ?? filtered.FirstOrDefault(),
+
+            ModelPreference.MostCapable => filtered
+                .Where(m => m.Name!.Contains("pro", StringComparison.OrdinalIgnoreCase) ||
+                           m.Name!.Contains("ultra", StringComparison.OrdinalIgnoreCase))
+                .Where(m => !m.Name!.Contains("preview", StringComparison.OrdinalIgnoreCase) &&
+                           !m.Name!.Contains("experimental", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(m => m.InputTokenLimit)
+                .FirstOrDefault() ?? filtered.FirstOrDefault(),
+
+            ModelPreference.Balanced => filtered
+                .Where(m => !m.Name!.Contains("preview", StringComparison.OrdinalIgnoreCase) &&
+                           !m.Name!.Contains("experimental", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(m => m.Name!.Contains("flash", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenByDescending(m => m.Name)
+                .FirstOrDefault() ?? filtered.FirstOrDefault(),
+
+            _ => filtered.FirstOrDefault()
+        };
+    }
+}
+
+
+================================================================================
+FILE: GeminiClient/Models/GeminiModel.cs
+SIZE: 1.36 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/Models/GeminiModel.cs
+using System.Text.Json.Serialization;
+
+namespace GeminiClient.Models;
+
+public class GeminiModel
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty; // Non-nullable with default
+
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("inputTokenLimit")]
+    public int? InputTokenLimit { get; set; }
+
+    [JsonPropertyName("outputTokenLimit")]
+    public int? OutputTokenLimit { get; set; }
+
+    [JsonPropertyName("supportedGenerationMethods")]
+    public List<string>? SupportedGenerationMethods { get; set; }
+
+    [JsonPropertyName("temperature")]
+    public double? Temperature { get; set; }
+
+    [JsonPropertyName("topP")]
+    public double? TopP { get; set; }
+
+    [JsonPropertyName("topK")]
+    public int? TopK { get; set; }
+
+    /// <summary>
+    /// Gets just the model identifier without the "models/" prefix.
+    /// </summary>
+    public string GetModelIdentifier()
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+            return string.Empty;
+
+        return Name.StartsWith("models/")
+            ? Name.Substring(7)
+            : Name;
+    }
+}
+
+public class ModelsListResponse
+{
+    [JsonPropertyName("models")]
+    public List<GeminiModel>? Models { get; set; }
+}
+
+
+================================================================================
+FILE: GeminiClient/Models/GeminiRequest.cs
+SIZE: .43 KB
+MODIFIED: 2025-12-24 13:20:31
+================================================================================
+
+﻿// GeminiClient/Models/GeminiRequest.cs
+using System.Text.Json.Serialization;
+
+namespace GeminiClient.Models;
+
+public class GeminiRequest
+{
+    [JsonPropertyName("contents")]
+    public List<Content> Contents { get; set; } = [];
+}
+
+public class Content
+{
+    [JsonPropertyName("parts")]
+    public List<Part> Parts { get; set; } = [];
+}
+
+public class Part
+{
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = string.Empty;
+}
+
+
+================================================================================
+FILE: GeminiClient/Models/GeminiResponse.cs
+SIZE: 1.10 KB
+MODIFIED: 2025-12-24 13:20:31
+================================================================================
+
+﻿// GeminiClient/Models/GeminiResponse.cs
+using System.Text.Json.Serialization;
+
+namespace GeminiClient.Models;
+
+// Basic response structure - Adapt based on the actual Gemini API response
+public class GeminiResponse
+{
+    [JsonPropertyName("candidates")]
+    public List<Candidate> Candidates { get; set; } = [];
+
+    // You might also have properties like "promptFeedback" depending on the request
+}
+
+public class Candidate
+{
+    [JsonPropertyName("content")]
+    public Content? Content { get; set; }
+
+    [JsonPropertyName("finishReason")]
+    public string? FinishReason { get; set; }
+
+    [JsonPropertyName("index")]
+    public int Index { get; set; }
+
+    [JsonPropertyName("safetyRatings")]
+    public List<SafetyRating> SafetyRatings { get; set; } = [];
+}
+
+// Content model is already defined in GeminiRequest.cs, but might differ slightly
+// in response, adjust if necessary.
+
+// Part model is already defined in GeminiRequest.cs
+
+public class SafetyRating
+{
+    [JsonPropertyName("category")]
+    public string? Category { get; set; }
+
+    [JsonPropertyName("probability")]
+    public string? Probability { get; set; }
+}
+
+
+================================================================================
+FILE: GeminiClient/Models/ModelSelectionCriteria.cs
+SIZE: 1.10 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/Models/ModelSelectionCriteria.cs
+namespace GeminiClient.Models;
+
+public class ModelSelectionCriteria
+{
+    public ModelPreference Preference { get; set; } = ModelPreference.Fastest;
+    public ModelCapability? RequiredCapability { get; set; }
+    public int? MinInputTokens { get; set; }
+    public int? MinOutputTokens { get; set; }
+    public bool PreferStable { get; set; } = true;
+
+    public static ModelSelectionCriteria Default => new()
+    {
+        Preference = ModelPreference.Fastest,
+        RequiredCapability = ModelCapability.TextGeneration,
+        PreferStable = true
+    };
+
+    public static ModelSelectionCriteria HighCapacity => new()
+    {
+        Preference = ModelPreference.MostCapable,
+        MinInputTokens = 100000,
+        MinOutputTokens = 8000,
+        PreferStable = true
+    };
+}
+
+public enum ModelPreference
+{
+    Fastest,        // Prefer flash models
+    MostCapable,    // Prefer pro/ultra models
+    Balanced        // Balance between speed and capability
+}
+
+public enum ModelCapability
+{
+    TextGeneration,
+    CodeGeneration,
+    ChatCompletion,
+    ImageGeneration
+}
+
+
+================================================================================
+FILE: GeminiClient/ServiceCollectionExtensions.cs
+SIZE: 3.03 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿// GeminiClient/ServiceCollectionExtensions.cs (Updated to avoid trimming warnings)
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+
+namespace GeminiClient;
+
+public static class ServiceCollectionExtensions
+{
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "GeminiApiOptions is preserved and only contains primitive types")]
+    public static IServiceCollection AddGeminiApiClient(
+        this IServiceCollection services,
+        IConfigurationSection configurationSection)
+    {
+        ArgumentNullException.ThrowIfNull(configurationSection);
+
+        // Manual configuration binding to avoid trimming issues
+        services.Configure<GeminiApiOptions>(options =>
+        {
+            options.ApiKey = configurationSection["ApiKey"];
+            options.BaseUrl = configurationSection["BaseUrl"] ?? "https://generativelanguage.googleapis.com/";
+            options.DefaultModel = configurationSection["DefaultModel"];
+            options.ModelPreference = configurationSection["ModelPreference"];
+
+            if (int.TryParse(configurationSection["TimeoutSeconds"], out int timeout))
+                options.TimeoutSeconds = timeout;
+            else
+                options.TimeoutSeconds = 30;
+
+            if (int.TryParse(configurationSection["MaxRetries"], out int retries))
+                options.MaxRetries = retries;
+            else
+                options.MaxRetries = 3;
+
+            if (bool.TryParse(configurationSection["EnableDetailedLogging"], out bool logging))
+                options.EnableDetailedLogging = logging;
+        });
+
+        // Add validation
+        services.AddSingleton<IValidateOptions<GeminiApiOptions>, GeminiApiOptionsValidator>();
+
+        // Add memory cache for model caching (if not already added)
+        services.TryAddSingleton<IMemoryCache, MemoryCache>();
+
+        // Register ModelService with HttpClient
+        _ = services.AddHttpClient<IModelService, ModelService>((serviceProvider, client) =>
+        {
+            GeminiApiOptions options = serviceProvider.GetRequiredService<IOptions<GeminiApiOptions>>().Value;
+            if (string.IsNullOrWhiteSpace(options.BaseUrl))
+                throw new InvalidOperationException("Gemini BaseUrl is not configured.");
+            client.BaseAddress = new Uri(options.BaseUrl);
+        });
+
+        // Register GeminiApiClient with HttpClient
+        _ = services.AddHttpClient<IGeminiApiClient, GeminiApiClient>((serviceProvider, client) =>
+        {
+            GeminiApiOptions options = serviceProvider.GetRequiredService<IOptions<GeminiApiOptions>>().Value;
+            if (string.IsNullOrWhiteSpace(options.BaseUrl))
+                throw new InvalidOperationException("Gemini BaseUrl is not configured.");
+            client.BaseAddress = new Uri(options.BaseUrl);
+        });
+
+        return services;
+    }
+}
+
+
+
+================================================================================
+FILE: .gitattributes
+SIZE: 2.45 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+###############################################################################
+# Set default behavior to automatically normalize line endings.
+###############################################################################
+* text=auto
+
+###############################################################################
+# Set default behavior for command prompt diff.
+#
+# This is need for earlier builds of msysgit that does not have it on by
+# default for csharp files.
+# Note: This is only used by command line
+###############################################################################
+#*.cs     diff=csharp
+
+###############################################################################
+# Set the merge driver for project and solution files
+#
+# Merging from the command prompt will add diff markers to the files if there
+# are conflicts (Merging from VS is not affected by the settings below, in VS
+# the diff markers are never inserted). Diff markers may cause the following 
+# file extensions to fail to load in VS. An alternative would be to treat
+# these files as binary and thus will always conflict and require user
+# intervention with every merge. To do so, just uncomment the entries below
+###############################################################################
+#*.sln       merge=binary
+#*.csproj    merge=binary
+#*.vbproj    merge=binary
+#*.vcxproj   merge=binary
+#*.vcproj    merge=binary
+#*.dbproj    merge=binary
+#*.fsproj    merge=binary
+#*.lsproj    merge=binary
+#*.wixproj   merge=binary
+#*.modelproj merge=binary
+#*.sqlproj   merge=binary
+#*.wwaproj   merge=binary
+
+###############################################################################
+# behavior for image files
+#
+# image files are treated as binary by default.
+###############################################################################
+#*.jpg   binary
+#*.png   binary
+#*.gif   binary
+
+###############################################################################
+# diff behavior for common document formats
+# 
+# Convert binary document formats to text before diffing them. This feature
+# is only available from the command line. Turn it on by uncommenting the 
+# entries below.
+###############################################################################
+#*.doc   diff=astextplain
+#*.DOC   diff=astextplain
+#*.docx  diff=astextplain
+#*.DOCX  diff=astextplain
+#*.dot   diff=astextplain
+#*.DOT   diff=astextplain
+#*.pdf   diff=astextplain
+#*.PDF   diff=astextplain
+#*.rtf   diff=astextplain
+#*.RTF   diff=astextplain
+
+
+================================================================================
+FILE: .github/workflows/build-and-release.yml
+SIZE: 6.62 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+# .github/workflows/build-and-release.yml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers on version tags like v1.0.0
+  workflow_dispatch: # Allows manual triggering
+    inputs:
+      version:
+        description: 'Version number (e.g., 1.0.0)'
+        required: true
+        type: string
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  PROJECT_PATH: 'GeminiClientConsole/GeminiClientConsole.csproj'
+  SOLUTION_PATH: 'GeminiClient.sln' # Update if your solution has a different name
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          # Windows targets
+          - os: win-x64
+            name: Windows-x64
+            extension: .exe
+          - os: win-x86
+            name: Windows-x86
+            extension: .exe
+          - os: win-arm64
+            name: Windows-ARM64
+            extension: .exe
+            
+          # Linux targets
+          - os: linux-x64
+            name: Linux-x64
+            extension: ''
+          - os: linux-arm
+            name: Linux-ARM
+            extension: ''
+          - os: linux-arm64
+            name: Linux-ARM64
+            extension: ''
+          - os: linux-musl-x64
+            name: Linux-Alpine-x64
+            extension: ''
+            
+          # macOS targets
+          - os: osx-x64
+            name: macOS-x64
+            extension: ''
+          - os: osx-arm64
+            name: macOS-ARM64
+            extension: ''
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    - name: Build and Publish
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime ${{ matrix.os }} \
+          --self-contained true \
+          --output ./publish/${{ matrix.os }} \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:IncludeNativeLibrariesForSelfExtract=true \
+          -p:EnableCompressionInSingleFile=true \
+          -p:DebugType=None \
+          -p:DebugSymbols=false
+
+    - name: Rename executable
+      run: |
+        if [ "${{ matrix.os }}" = "win-x64" ] || [ "${{ matrix.os }}" = "win-x86" ] || [ "${{ matrix.os }}" = "win-arm64" ]; then
+          mv ./publish/${{ matrix.os }}/GeminiClientConsole${{ matrix.extension }} \
+             ./publish/${{ matrix.os }}/gemini-client-${{ matrix.os }}${{ matrix.extension }}
+        else
+          mv ./publish/${{ matrix.os }}/GeminiClientConsole \
+             ./publish/${{ matrix.os }}/gemini-client-${{ matrix.os }}
+          chmod +x ./publish/${{ matrix.os }}/gemini-client-${{ matrix.os }}
+        fi
+
+    - name: Create archive
+      run: |
+        cd ./publish/${{ matrix.os }}
+        if [ "${{ matrix.os }}" = "win-x64" ] || [ "${{ matrix.os }}" = "win-x86" ] || [ "${{ matrix.os }}" = "win-arm64" ]; then
+          zip -r ../../gemini-client-${{ matrix.os }}.zip .
+        else
+          tar -czf ../../gemini-client-${{ matrix.os }}.tar.gz .
+        fi
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: gemini-client-${{ matrix.os }}
+        path: |
+          gemini-client-${{ matrix.os }}.zip
+          gemini-client-${{ matrix.os }}.tar.gz
+        if-no-files-found: ignore
+
+  create-release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          echo "tag_name=v${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Generate Release Notes
+      id: release_notes
+      run: |
+        cat << EOF > release_notes.md
+        # Gemini Client Console ${{ steps.version.outputs.version }}
+        
+        ## 🚀 Features
+        - Interactive model selection from available Gemini models
+        - Response time tracking and performance metrics
+        - Session statistics
+        - Configurable via appsettings.json or environment variables
+        
+        ## 📦 Installation
+        
+        ### Windows
+        1. Download the appropriate Windows package for your architecture
+        2. Extract the ZIP file
+        3. Run \`gemini-client-win-x64.exe\` (or your architecture's version)
+        
+        ### Linux
+        1. Download the appropriate Linux package for your architecture
+        2. Extract: \`tar -xzf gemini-client-linux-x64.tar.gz\`
+        3. Make executable: \`chmod +x gemini-client-linux-x64\`
+        4. Run: \`./gemini-client-linux-x64\`
+        
+        ### macOS
+        1. Download the appropriate macOS package for your architecture (x64 for Intel, arm64 for Apple Silicon)
+        2. Extract: \`tar -xzf gemini-client-osx-arm64.tar.gz\`
+        3. Make executable: \`chmod +x gemini-client-osx-arm64\`
+        4. Run: \`./gemini-client-osx-arm64\`
+        
+        ## ⚙️ Configuration
+        
+        Create an \`appsettings.json\` file in the same directory as the executable:
+        
+        \`\`\`json
+        {
+          "GeminiSettings": {
+            "ApiKey": "YOUR_API_KEY",
+            "BaseUrl": "https://generativelanguage.googleapis.com/",
+            "DefaultModel": "gemini-2.5-flash"
+          }
+        }
+        \`\`\`
+        
+        Or set environment variables:
+        - \`GeminiSettings__ApiKey=YOUR_API_KEY\`
+        - \`GEMINI_DEFAULT_MODEL=gemini-2.5-flash\`
+        
+        ## 📝 Changelog
+        See [changelog.md](https://github.com/${{ github.repository }}/blob/main/changelog.md) for details.
+        
+        ## 🐛 Known Issues
+        - Some experimental models may return server errors
+        - Use stable models like \`gemini-2.5-flash\` for best results
+        EOF
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.tag_name }}
+        name: Gemini Client ${{ steps.version.outputs.version }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: false
+        files: |
+          ./artifacts/**/*.zip
+          ./artifacts/**/*.tar.gz
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+================================================================================
+FILE: .github/workflows/ci.yml
+SIZE: 4.15 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  pull_request:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        configuration: [Debug, Release]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Full history for better build versioning
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --configuration ${{ matrix.configuration }} --no-restore
+
+    - name: Run tests
+      run: dotnet test --configuration ${{ matrix.configuration }} --no-build --verbosity normal --logger trx --results-directory TestResults
+      if: hashFiles('**/*Tests.csproj') != ''
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always() && hashFiles('**/*Tests.csproj') != ''
+      with:
+        name: test-results-${{ matrix.os }}-${{ matrix.configuration }}
+        path: TestResults/*.trx
+
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Check code formatting
+      run: |
+        dotnet format --verify-no-changes --verbosity diagnostic
+      continue-on-error: true # Don't fail the build on format issues
+
+    - name: Run code analysis
+      run: |
+        dotnet build /p:TreatWarningsAsErrors=true /p:AnalysisMode=AllEnabledByDefault
+      continue-on-error: true # Don't fail on warnings for now
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Scan for vulnerable packages
+      run: |
+        dotnet list package --vulnerable --include-transitive
+        
+    - name: Install security scanner
+      run: |
+        dotnet tool install --global security-scan
+      continue-on-error: true
+
+  publish-preview:
+    name: Test Publish
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Test publish for multiple runtimes
+      run: |
+        # Test that publish works for major platforms
+        for runtime in win-x64 linux-x64 osx-arm64; do
+          echo "Testing publish for $runtime..."
+          dotnet publish GeminiClientConsole/GeminiClientConsole.csproj \
+            --configuration Release \
+            --runtime $runtime \
+            --self-contained true \
+            --output ./test-publish/$runtime \
+            -p:PublishSingleFile=true \
+            -p:PublishTrimmed=true
+        done
+
+    - name: Check output sizes
+      run: |
+        echo "### Build Sizes" >> $GITHUB_STEP_SUMMARY
+        echo "| Platform | Size |" >> $GITHUB_STEP_SUMMARY
+        echo "|----------|------|" >> $GITHUB_STEP_SUMMARY
+        for dir in ./test-publish/*; do
+          platform=$(basename $dir)
+          size=$(du -sh $dir | cut -f1)
+          echo "| $platform | $size |" >> $GITHUB_STEP_SUMMARY
+        done
+
+================================================================================
+FILE: .gitignore
+SIZE: 6.09 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+## Ignore Visual Studio temporary files, build results, and
+## files generated by popular Visual Studio add-ons.
+##
+## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# User-specific files (MonoDevelop/Xamarin Studio)
+*.userprefs
+
+# Mono auto generated files
+mono_crash.*
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+# Uncomment if you have tasks that create the project's static files in wwwroot
+#wwwroot/
+
+# Visual Studio 2017 auto generated files
+Generated\ Files/
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# NUnit
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+
+# Build Results of an ATL Project
+[Dd]ebugPS/
+[Rr]eleasePS/
+dlldata.c
+
+# Benchmark Results
+BenchmarkDotNet.Artifacts/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# StyleCop
+StyleCopReport.xml
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# Chutzpah Test files
+_Chutzpah*
+
+# Visual C++ cache files
+ipch/
+*.aps
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.cachefile
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# Visual Studio Trace Files
+*.e2e
+
+# TFS 2012 Local Workspace
+$tf/
+
+# Guidance Automation Toolkit
+*.gpState
+
+# ReSharper is a .NET coding add-in
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# TeamCity is a build add-in
+_TeamCity*
+
+# DotCover is a Code Coverage Tool
+*.dotCover
+
+# AxoCover is a Code Coverage Tool
+.axoCover/*
+!.axoCover/settings.json
+
+# Coverlet is a free, cross platform Code Coverage Tool
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# Visual Studio code coverage results
+*.coverage
+*.coveragexml
+
+# NCrunch
+_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+
+# MightyMoose
+*.mm.*
+AutoTest.Net/
+
+# Web workbench (sass)
+.sass-cache/
+
+# Installshield output folder
+[Ee]xpress/
+
+# DocProject is a documentation generator add-in
+DocProject/buildhelp/
+DocProject/Help/*.HxT
+DocProject/Help/*.HxC
+DocProject/Help/*.hhc
+DocProject/Help/*.hhk
+DocProject/Help/*.hhp
+DocProject/Help/Html2
+DocProject/Help/html
+
+# Click-Once directory
+publish/
+
+# Publish Web Output
+*.[Pp]ublish.xml
+*.azurePubxml
+# Note: Comment the next line if you want to checkin your web deploy settings,
+# but database connection strings (with potential passwords) will be unencrypted
+*.pubxml
+*.publishproj
+
+# Microsoft Azure Web App publish settings. Comment the next line if you want to
+# checkin your Azure Web App publish settings, but sensitive information contained
+# in these scripts will be unencrypted
+PublishScripts/
+
+# NuGet Packages
+*.nupkg
+# NuGet Symbol Packages
+*.snupkg
+# The packages folder can be ignored because of Package Restore
+**/[Pp]ackages/*
+# except build/, which is used as an MSBuild target.
+!**/[Pp]ackages/build/
+# Uncomment if necessary however generally it will be regenerated when needed
+#!**/[Pp]ackages/repositories.config
+# NuGet v3's project.json files produces more ignorable files
+*.nuget.props
+*.nuget.targets
+
+# Microsoft Azure Build Output
+csx/
+*.build.csdef
+
+# Microsoft Azure Emulator
+ecf/
+rcf/
+
+# Windows Store app package directories and files
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.appx
+*.appxbundle
+*.appxupload
+
+# Visual Studio cache files
+# files ending in .cache can be ignored
+*.[Cc]ache
+# but keep track of directories ending in .cache
+!?*.[Cc]ache/
+
+# Others
+ClientBin/
+~$*
+*~
+*.dbmdl
+*.dbproj.schemaview
+*.jfm
+*.pfx
+*.publishsettings
+orleans.codegen.cs
+
+# Including strong name files can present a security risk
+# (https://github.com/github/gitignore/pull/2483#issue-259490424)
+#*.snk
+
+# Since there are multiple workflows, uncomment next line to ignore bower_components
+# (https://github.com/github/gitignore/pull/1529#issuecomment-104372622)
+#bower_components/
+
+# RIA/Silverlight projects
+Generated_Code/
+
+# Backup & report files from converting an old project file
+# to a newer Visual Studio version. Backup files are not needed,
+# because we have git ;-)
+_UpgradeReport_Files/
+Backup*/
+UpgradeLog*.XML
+UpgradeLog*.htm
+ServiceFabricBackup/
+*.rptproj.bak
+
+# SQL Server files
+*.mdf
+*.ldf
+*.ndf
+
+# Business Intelligence projects
+*.rdl.data
+*.bim.layout
+*.bim_*.settings
+*.rptproj.rsuser
+*- [Bb]ackup.rdl
+*- [Bb]ackup ([0-9]).rdl
+*- [Bb]ackup ([0-9][0-9]).rdl
+
+# Microsoft Fakes
+FakesAssemblies/
+
+# GhostDoc plugin setting file
+*.GhostDoc.xml
+
+# Node.js Tools for Visual Studio
+.ntvs_analysis.dat
+node_modules/
+
+# Visual Studio 6 build log
+*.plg
+
+# Visual Studio 6 workspace options file
+*.opt
+
+# Visual Studio 6 auto-generated workspace file (contains which files were open etc.)
+*.vbw
+
+# Visual Studio LightSwitch build output
+**/*.HTMLClient/GeneratedArtifacts
+**/*.DesktopClient/GeneratedArtifacts
+**/*.DesktopClient/ModelManifest.xml
+**/*.Server/GeneratedArtifacts
+**/*.Server/ModelManifest.xml
+_Pvt_Extensions
+
+# Paket dependency manager
+.paket/paket.exe
+paket-files/
+
+# FAKE - F# Make
+.fake/
+
+# CodeRush personal settings
+.cr/personal
+
+# Python Tools for Visual Studio (PTVS)
+__pycache__/
+*.pyc
+
+# Cake - Uncomment if you are using it
+# tools/**
+# !tools/packages.config
+
+# Tabs Studio
+*.tss
+
+# Telerik's JustMock configuration file
+*.jmconfig
+
+# BizTalk build output
+*.btp.cs
+*.btm.cs
+*.odx.cs
+*.xsd.cs
+
+# OpenCover UI analysis results
+OpenCover/
+
+# Azure Stream Analytics local run output
+ASALocalRun/
+
+# MSBuild Binary and Structured Log
+*.binlog
+
+# NVidia Nsight GPU debugger configuration file
+*.nvuser
+
+# MFractors (Xamarin productivity tool) working folder
+.mfractor/
+
+# Local History for Visual Studio
+.localhistory/
+
+# BeatPulse healthcheck temp database
+healthchecksdb
+
+# Backup folder for Package Reference Convert tool in Visual Studio 2017
+MigrationBackup/
+
+# Ionide (cross platform F# VS Code tools) working folder
+.ionide/
+
+# Fody - auto-generated XML schema
+FodyWeavers.xsd
+
+launchSettings.json
+
+
+================================================================================
+FILE: LearningByDoing.sln
+SIZE: 1.59 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35919.96 d17.13
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeminiClient", "GeminiClient\GeminiClient.csproj", "{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeminiClientConsole", "GeminiClientConsole\GeminiClientConsole.csproj", "{31CCAAB0-54F2-4889-B706-FCD7251370A7}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EFE344B2-DCAB-4F1B-AB20-12783BF21788}
+	EndGlobalSection
+EndGlobal
+
+
+================================================================================
+FILE: README.md
+SIZE: 18.09 KB
+MODIFIED: 2025-12-24 13:18:10
+================================================================================
+
+# 🤖 Gemini Client Console
+
+A powerful, interactive command-line client for Google's Gemini AI API with **real-time streaming**, model selection, performance metrics, and session statistics.
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/yourusername/GeminiClient)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/yourusername/GeminiClient/build-and-release.yml)
+![Platform Support](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)
+![.NET](https://img.shields.io/badge/.NET-9.0-purple)
+![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
+
+## 🔑 Quick Start - API Key Required!
+
+> **⚠️ IMPORTANT: You need a Google Gemini API key to use this application!**
+
+### Getting Your API Key
+
+1. **Get a FREE API key** from Google AI Studio: [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Click "Get API Key" and follow the instructions
+3. Copy your API key (starts with `AIza...`)
+
+### Setting Your API Key (3 Methods)
+
+#### Method 1: Configuration File (Recommended)
+Create an `appsettings.json` file in the same directory as the executable:
+
+```json
+{
+  "GeminiSettings": {
+    "ApiKey": "YOUR_API_KEY_HERE",
+    "BaseUrl": "https://generativelanguage.googleapis.com/",
+    "DefaultModel": "gemini-2.5-flash",
+    "StreamingEnabled": true
+  }
+}
+```
+
+#### Method 2: Environment Variable
+```bash
+# Linux/macOS
+export GeminiSettings__ApiKey="YOUR_API_KEY_HERE"
+
+# Windows Command Prompt
+set GeminiSettings__ApiKey=YOUR_API_KEY_HERE
+
+# Windows PowerShell
+$env:GeminiSettings__ApiKey="YOUR_API_KEY_HERE"
+```
+
+#### Method 3: User Secrets (Development)
+```bash
+dotnet user-secrets set "GeminiSettings:ApiKey" "YOUR_API_KEY_HERE"
+```
+
+> **🔒 Security Note**: Never commit your API key to version control! The `appsettings.json` file is gitignored by default.
+
+## 📥 Installation
+
+### Download Pre-built Binaries
+
+Download the latest release for your platform from the [Releases page](https://github.com/yourusername/GeminiClient/releases).
+
+| Platform | Download | Architecture |
+|----------|----------|--------------|
+| **Windows** | `gemini-client-win-x64.zip` | 64-bit Intel/AMD |
+| | `gemini-client-win-x86.zip` | 32-bit Intel/AMD |
+| | `gemini-client-win-arm64.zip` | ARM64 |
+| **Linux** | `gemini-client-linux-x64.tar.gz` | 64-bit Intel/AMD |
+| | `gemini-client-linux-arm64.tar.gz` | ARM64 (Raspberry Pi 4+) |
+| | `gemini-client-linux-musl-x64.tar.gz` | Alpine Linux |
+| **macOS** | `gemini-client-osx-x64.tar.gz` | Intel Macs |
+| | `gemini-client-osx-arm64.tar.gz` | Apple Silicon (M1/M2/M3) |
+
+### Running the Application
+
+#### Windows
+```powershell
+# Extract the ZIP file
+# Double-click gemini-client-win-x64.exe
+# OR run from command line:
+.\gemini-client-win-x64.exe
+```
+
+#### Linux/macOS
+```bash
+# Extract the archive
+tar -xzf gemini-client-linux-x64.tar.gz
+
+# Make executable
+chmod +x gemini-client-linux-x64
+
+# Run
+./gemini-client-linux-x64
+```
+
+## 🚀 Features
+
+### 🌊 Real-time Streaming Responses ✨ NEW!
+- **Live Text Generation**: See responses appear character by character as they're generated
+- **Server-Sent Events (SSE)**: True real-time streaming from Gemini API
+- **Streaming Toggle**: Switch between streaming and batch modes with the `stream` command
+- **First Response Timing**: See exactly when the first chunk arrives (typically 200-500ms)
+- **Real-time Performance**: Monitor streaming speed and throughput as it happens
+- **Memory Efficient**: Yield-based processing handles large responses without memory spikes
+
+### Interactive Model Selection
+- **Dynamic Model Discovery**: Automatically fetches all available Gemini models with animated loading
+- **Smart Recommendations**: Suggests optimal models based on your needs
+- **Model Categories**:
+  - ⚡ **Flash Models**: Fast, cost-effective for most tasks
+  - 💎 **Pro Models**: Advanced capabilities for complex tasks
+  - 🚀 **Ultra Models**: Maximum performance (when available)
+  - 🧪 **Experimental Models**: Cutting-edge features in testing
+- **Timeout Support**: Automatic default selection after 5 minutes of inactivity
+- **Animated UI**: Smooth loading animations and character-by-character confirmations
+
+### Advanced Performance Metrics
+- **Response Time Tracking**: See exactly how long each request takes
+- **Token Speed Analysis**: Monitors tokens/second throughput in real-time
+- **Visual Speed Indicators**:
+  - 🐌 Slow (< 10 tokens/s)
+  - 🚶 Normal (10-30 tokens/s)
+  - 🏃 Fast (30-50 tokens/s)
+  - 🚀 Very Fast (50-100 tokens/s)
+  - ⚡ Lightning (100+ tokens/s)
+- **Streaming vs Batch Comparison**: Compare performance between modes
+- **Session Averages**: Track improvements over time
+
+### Comprehensive Session Statistics
+- Track all requests in your session
+- View average response times across models
+- Compare streaming vs non-streaming performance
+- See total tokens and characters processed
+- Model usage breakdown with performance metrics
+
+### Smart Error Handling
+- Automatic fallback to stable models
+- Clear error messages with suggested fixes
+- Graceful handling of API limits and server issues
+- Streaming connection recovery and retry logic
+
+## 💻 Usage
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `exit` | Quit the application |
+| `model` | Change the selected AI model |
+| `stats` | View detailed session statistics |
+| `stream` | Toggle streaming mode ON/OFF |
+
+### Example Streaming Session
+
+```
+🤖 Available Gemini Models:
+═══════════════════════════
+⠋ Checking model availability...
+
+  [1] ⚡ gemini-2.5-flash - Latest Gemini 2.5 Flash - Fast and efficient
+  [2] 💎 gemini-2.0-flash-exp - Experimental Gemini 2.0 Flash - Cutting edge features
+  [3] 🚀 gemini-2.0-flash - Gemini 2.0 Flash - Balanced performance
+
+Select a model (1-3) or press Enter for default [gemini-2.5-flash]:
+> [Press Enter]
+
+✓ Selected: g e m i n i - 2 . 5 - f l a s h
+🎉 Ready to go!
+
+📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for session stats, 'stream' to toggle streaming: ON):
+> Explain quantum computing in simple terms
+
+╭─── Streaming Response ───╮
+⚡ First response: 247ms
+
+Quantum computing is like having a magical computer that can try many solutions 
+at once instead of one at a time. Imagine you're trying to solve a massive maze...
+
+[Text continues to appear in real-time as it's generated]
+
+...This makes them incredibly powerful for certain types of problems!
+╰────────────────╯
+
+📊 Streaming Performance Metrics:
+   └─ Total Time: 2.34s
+   └─ Words: 127 | Characters: 823
+   └─ Est. Tokens: ~206 | Speed: 88.0 tokens/s [████████░░] 🚀
+   └─ Mode: 🌊 Streaming (real-time)
+
+📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for session stats, 'stream' to toggle streaming: ON):
+> stream
+
+✓ Streaming disabled
+
+📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for session stats, 'stream' to toggle streaming: OFF):
+> What is machine learning?
+
+⠙ Generating response... [00:01.89]
+
+╭─── Response ─── ⏱ 1.89s ───╮
+Machine learning is a branch of artificial intelligence (AI) that enables 
+computers to learn and improve from experience without being explicitly 
+programmed for every task...
+╰────────────────╯
+
+📊 Performance Metrics:
+   └─ Response Time: 1.89s
+   └─ Words: 95 | Characters: 634
+   └─ Est. Tokens: ~158 | Speed: 83.6 tokens/s [████████░░] 🚀
+   └─ Session Avg: 2.12s (🟢 faster)
+
+📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for session stats, 'stream' to toggle streaming: OFF):
+> stats
+
+╔═══ Session Statistics ═══╗
+  📊 Total Requests: 2
+  ⏱  Average Response: 2.12s
+  🚀 Fastest: 1.89s
+  🐌 Slowest: 2.34s
+  📝 Total Output: 1,457 characters
+  ⏰ Session Duration: 2m 34s
+  🌊 Streaming: Disabled
+
+  🤖 Models Used:
+     └─ gemini-2.5-flash: 2 requests (avg 2.12s)
+╚════════════════════════╝
+```
+
+## ⚙️ Configuration
+
+### Full Configuration Options
+
+```json
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "GeminiClient": "Information",
+      "GeminiClientConsole": "Information"
+    }
+  },
+  "GeminiSettings": {
+    "ApiKey": "YOUR_API_KEY_HERE",
+    "BaseUrl": "https://generativelanguage.googleapis.com/",
+    "DefaultModel": "gemini-2.5-flash",
+    "ModelPreference": "Fastest",
+    "TimeoutSeconds": 30,
+    "MaxRetries": 3,
+    "EnableDetailedLogging": false,
+    
+    // Streaming Configuration
+    "StreamingEnabled": true,
+    "StreamingTimeout": 300,
+    "StreamingChunkDelay": 50,
+    "StreamingRetryAttempts": 3
+  }
+}
+```
+
+### Configuration Priority
+
+The application loads configuration in this order (later sources override earlier ones):
+1. Default values
+2. `appsettings.json` file
+3. User secrets (development only)
+4. Environment variables
+5. Command line arguments (if applicable)
+
+### Model Preferences
+
+Set `ModelPreference` to control automatic model selection:
+- `"Fastest"` - Prefers Flash models for quick responses
+- `"MostCapable"` - Prefers Pro/Ultra models for complex tasks
+- `"Balanced"` - Balances speed and capability
+
+### Streaming Options
+
+- `StreamingEnabled` - Enable streaming by default (can be toggled at runtime)
+- `StreamingTimeout` - Seconds to wait for streaming response chunks
+- `StreamingChunkDelay` - Milliseconds between chunk processing (for visual effect)
+- `StreamingRetryAttempts` - Number of retry attempts for failed streaming connections
+
+## 🛠️ Building from Source
+
+### Prerequisites
+
+- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- Git
+
+### Build Steps
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/GeminiClient.git
+cd GeminiClient
+
+# Restore dependencies
+dotnet restore
+
+# Build
+dotnet build --configuration Release
+
+# Run
+dotnet run --project GeminiClientConsole
+```
+
+### Creating a Release Build
+
+```bash
+# Windows PowerShell
+./build-release.ps1 -Version 0.0.6
+
+# Linux/macOS
+chmod +x build-release.sh
+./build-release.sh 0.0.6
+```
+
+## 📦 Project Structure
+
+```
+GeminiClient/
+├── GeminiClient/                 # Core library
+│   ├── GeminiApiClient.cs       # Main API client with streaming support
+│   ├── IGeminiApiClient.cs      # Client interface (sync + async streaming)
+│   └── Models/                  # Data models and JSON serialization
+├── GeminiClientConsole/          # Console application
+│   ├── Program.cs               # Entry point with DI setup
+│   ├── AppRunner.cs             # Main application logic with streaming UI
+│   └── ConsoleModelSelector.cs  # Interactive model selection with animations
+├── .github/workflows/            # CI/CD pipelines
+│   ├── build-and-release.yml   # Release automation
+│   └── ci.yml                   # Continuous integration
+└── README.md                     # This file
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Clone your fork
+git clone https://github.com/yourusername/GeminiClient.git
+cd GeminiClient
+
+# Create a new branch
+git checkout -b feature/your-feature
+
+# Set up user secrets for development
+dotnet user-secrets set "GeminiSettings:ApiKey" "YOUR_API_KEY"
+
+# Run tests
+dotnet test
+
+# Run the application
+dotnet run --project GeminiClientConsole
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+#### "API Key not configured"
+- Make sure you've set your API key using one of the three methods above
+- Check that your `appsettings.json` is in the same directory as the executable
+- Verify environment variables are set correctly
+
+#### Streaming Issues
+- **Connection timeouts**: Increase `StreamingTimeout` in configuration
+- **Slow streaming**: Check your internet connection; try switching to batch mode temporarily
+- **Choppy text**: Adjust `StreamingChunkDelay` for smoother visual flow
+- **SSE format errors**: Some models may not support streaming; switch to a supported model
+
+#### "500 Internal Server Error"
+- Some experimental models may be unstable
+- Switch to a stable model like `gemini-2.5-flash`
+- Try disabling streaming mode with the `stream` command
+- Check [Google's status page](https://status.cloud.google.com/) for outages
+
+#### "Rate limit exceeded"
+- Free tier has usage limits
+- Wait a few minutes and try again
+- Consider upgrading your API plan
+- Streaming mode may consume quota faster due to persistent connections
+
+#### Application won't start on macOS
+```bash
+# Remove quarantine attribute
+xattr -d com.apple.quarantine ./gemini-client-osx-arm64
+
+# Make executable
+chmod +x ./gemini-client-osx-arm64
+```
+
+#### Application won't start on Linux
+```bash
+# Check if executable permission is set
+chmod +x ./gemini-client-linux-x64
+
+# If using Alpine Linux, use the musl version
+./gemini-client-linux-musl-x64
+```
+
+## 📊 Performance
+
+### Binary Sizes (Approximate)
+
+| Platform | Size | Notes |
+|----------|------|-------|
+| Windows x64 | ~37 MB | Self-contained, trimmed, includes SSE streaming |
+| Linux x64 | ~40 MB | Self-contained, trimmed, includes SSE streaming |
+| macOS ARM64 | ~38 MB | Self-contained, trimmed, includes SSE streaming |
+
+### System Requirements
+
+- **Memory**: 128 MB RAM minimum, 256 MB recommended for streaming
+- **Disk Space**: 50 MB for application
+- **Network**: Stable internet connection required (persistent for streaming)
+- **.NET Runtime**: Not required (self-contained)
+
+### Streaming Performance
+
+- **First Response**: Typically 200-500ms for Flash models
+- **Throughput**: 50-200+ tokens/second depending on model and network
+- **Memory Usage**: Constant ~50MB regardless of response length
+- **Connection**: Single persistent HTTP/2 connection per streaming session
+
+## 📝 API Usage and Limits
+
+### Free Tier Limits (as of 2025)
+
+- **Requests**: 60 requests per minute
+- **Daily Tokens**: Varies by model
+- **Rate Limits**: Automatically handled with retry logic
+- **Streaming**: May consume quota faster due to persistent connections
+
+### Tips for Optimal Usage
+
+1. **Use Flash models for most tasks** - They're fast, cost-effective, and fully support streaming
+2. **Toggle streaming as needed** - Use batch mode for very long responses to conserve bandwidth
+3. **Switch to Pro models for complex reasoning** - When you need advanced capabilities
+4. **Monitor your usage** - Check your [Google AI Studio dashboard](https://aistudio.google.com/)
+5. **Use session stats** - Track your performance patterns and optimize accordingly
+
+## 📜 License
+
+This project is licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later) - see the [LICENSE](LICENSE) file for details.
+
+### What this means:
+
+- ✅ **You can**: Use, modify, distribute, and use commercially
+- ⚠️ **You must**: Disclose source, include license and copyright notice, state changes, and use the same license
+- 🌐 **Network use**: If you run a modified version on a server, you must provide source code to users of that server
+- 🚫 **You cannot**: Hold the authors liable or remove the license terms
+
+For more information, see the [full AGPL-3.0 license text](https://www.gnu.org/licenses/agpl-3.0.en.html).
+
+## 🙏 Acknowledgments
+
+- Google for the Gemini AI API and Server-Sent Events support
+- The .NET team for the excellent framework and async/await patterns
+- All contributors and users of this project
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/GeminiClient/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/GeminiClient/discussions)
+- **API Documentation**: [Google AI Documentation](https://ai.google.dev/gemini-api/docs)
+- **Streaming API**: [Server-Sent Events Documentation](https://ai.google.dev/gemini-api/docs/text-generation#streaming)
+
+## 🗺️ Roadmap
+
+### Recently Completed ✅
+- ~~Add support for streaming responses~~ ✅ **COMPLETED v0.0.6** - Full SSE streaming with real-time display
+- ~~Enhanced model selection~~ ✅ **COMPLETED v0.0.6** - Animated, async model selection with validation
+
+### Upcoming Features
+- [ ] Add support for image inputs
+- [ ] Implement conversation history with streaming support
+- [ ] Add export functionality for responses (including streaming sessions)
+- [ ] Create a web UI version with WebSocket streaming
+- [ ] Implement prompt templates with streaming preview
+- [ ] Add batch processing mode for multiple prompts
+- [ ] Add support for function calling with streaming
+- [ ] Implement custom system prompts
+- [ ] Add response caching and deduplication
+
+### Future Enhancements
+- [ ] Multi-modal support (images, audio, video)
+- [ ] Plugin architecture for extensibility
+- [ ] Advanced streaming controls (pause/resume/speed)
+- [ ] Integration with popular development tools
+- [ ] Cloud deployment templates
+
+---
+
+<div align="center">
+
+Made with ❤️ using .NET 9, Google Gemini AI, and Server-Sent Events
+
+⭐ **Star this repo if you find it useful!**
+
+🌊 **Try the new streaming mode for a magical AI experience!**
+
+</div>
+
+---
+
+## 🔄 Version History
+
+- **v0.0.6** (Latest) - Added real-time streaming support with SSE, enhanced model selection with animations, improved performance metrics
+- **v0.0.5** - Improved terminal compatibility, removed Console.Clear() that was destroying scrollback buffer
+- **v0.0.4** - Interactive console client with dynamic model discovery, performance metrics, session statistics, cross-platform support
+- **v0.0.3** - Clean up compiler warnings
+- **v0.0.2** - Remove errant character 'W' from code
+- **v0.0.1** - Properly configure trimming for JSON serialization
+- **v0.0.0** - 🎉 Initial commit with basic project structure
+
+---
+
+*Notice: This project contains code generated by Large Language Models such as Claude and Gemini. All code is experimental whether explicitly stated or not. The streaming implementation uses Server-Sent Events (SSE) for real-time communication with the Gemini API.*
+
+===============================================================================
+EXPORT COMPLETED: Wed Dec 24 01:20:31 PM CST 2025
+Total Files Found: 30
+Files Exported: 30
+Files Skipped: 0 (binary or large files)
+Output File: /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
+===============================================================================
