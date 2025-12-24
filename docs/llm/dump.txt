@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Wed Dec 24 03:07:11 PM CST 2025
+Generated: Wed Dec 24 03:11:45 PM CST 2025
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -950,14 +950,15 @@ echo ""
 
 ================================================================================
 FILE: GeminiClientConsole/AppRunner.cs
-SIZE: 17.18 KB
-MODIFIED: 2025-12-24 14:53:03
+SIZE: 19.27 KB
+MODIFIED: 2025-12-24 15:11:44
 ================================================================================
 
 ﻿// GeminiClientConsole/AppRunner.cs
 using System.Diagnostics;
 using System.Text;
 using GeminiClient;
+using GeminiClient.Models;
 using Microsoft.Extensions.Logging;
 
 namespace GeminiClientConsole;
@@ -968,8 +969,12 @@ public class AppRunner : IDisposable
     private readonly ILogger<AppRunner> _logger;
     private readonly ConsoleModelSelector _modelSelector;
     private readonly ConversationLogger _conversationLogger;
+
+    // State Management
     private string? _selectedModel;
     private readonly List<ResponseMetrics> _sessionMetrics = [];
+    private readonly List<Content> _chatHistory = []; // Main conversation state
+
     private bool _streamingEnabled = true;
     private bool _disposed;
 
@@ -989,7 +994,6 @@ public class AppRunner : IDisposable
     {
         _logger.LogInformation("Application starting...");
 
-        // Display log file location
         Console.ForegroundColor = ConsoleColor.DarkCyan;
         Console.WriteLine($"📝 Conversation log: {_conversationLogger.GetLogFilePath()}");
         Console.ResetColor();
@@ -1000,11 +1004,29 @@ public class AppRunner : IDisposable
 
         while (true)
         {
-            Console.WriteLine($"\n📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for stats, 'log' to open logs, 'stream' to toggle streaming: {(_streamingEnabled ? "ON" : "OFF")}):");
+            Console.WriteLine($"\n📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [{(_streamingEnabled ? "ON" : "OFF")}]):");
+
+            // Visual indicator for context depth
+            if (_chatHistory.Count > 0)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"   (Context: {_chatHistory.Count / 2} turns)");
+                Console.ResetColor();
+            }
+
             Console.Write("> ");
             string? input = Console.ReadLine();
 
-            if (string.Equals(input, "exit", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("⚠ Prompt cannot be empty");
+                Console.ResetColor();
+                continue;
+            }
+
+            // Commands
+            if (input.Equals("exit", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("exit");
                 DisplaySessionSummary();
@@ -1012,28 +1034,38 @@ public class AppRunner : IDisposable
                 break;
             }
 
-            if (string.Equals(input, "model", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("reset", StringComparison.OrdinalIgnoreCase))
+            {
+                _conversationLogger.LogCommand("reset");
+                _chatHistory.Clear();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("✨ Conversation context cleared. Starting fresh.");
+                Console.ResetColor();
+                continue;
+            }
+
+            if (input.Equals("model", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("model");
                 _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
                 continue;
             }
 
-            if (string.Equals(input, "stats", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("stats", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("stats");
                 DisplaySessionSummary();
                 continue;
             }
 
-            if (string.Equals(input, "log", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("log", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("log");
                 OpenLogFolder();
                 continue;
             }
 
-            if (string.Equals(input, "stream", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("stream", StringComparison.OrdinalIgnoreCase))
             {
                 _streamingEnabled = !_streamingEnabled;
                 _conversationLogger.LogCommand($"stream ({(_streamingEnabled ? "enabled" : "disabled")})");
@@ -1043,13 +1075,13 @@ public class AppRunner : IDisposable
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(input))
+            // Processing
+            // 1. Add User Prompt to History
+            _chatHistory.Add(new Content
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("⚠ Prompt cannot be empty");
-                Console.ResetColor();
-                continue;
-            }
+                Role = "user",
+                Parts = [new Part { Text = input }]
+            });
 
             if (_streamingEnabled)
             {
@@ -1062,37 +1094,6 @@ public class AppRunner : IDisposable
         }
 
         _logger.LogInformation("Application finished");
-    }
-
-    private void OpenLogFolder()
-    {
-        try
-        {
-            string logDirectory = _conversationLogger.GetLogDirectory();
-            if (OperatingSystem.IsWindows())
-            {
-                Process.Start("explorer.exe", logDirectory);
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Process.Start("open", logDirectory);
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                Process.Start("xdg-open", logDirectory);
-            }
-
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"✓ Opened log folder: {logDirectory}");
-            Console.ResetColor();
-        }
-        catch (Exception ex)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"⚠ Could not open folder: {ex.Message}");
-            Console.WriteLine($"📁 Log location: {_conversationLogger.GetLogDirectory()}");
-            Console.ResetColor();
-        }
     }
 
     private async Task ProcessPromptStreamingAsync(string prompt)
@@ -1109,7 +1110,8 @@ public class AppRunner : IDisposable
             var responseBuilder = new StringBuilder();
             bool firstChunkReceived = false;
 
-            await foreach (string chunk in _geminiClient.StreamGenerateContentAsync(_selectedModel!, prompt))
+            // Pass full history here instead of just 'prompt'
+            await foreach (string chunk in _geminiClient.StreamGenerateContentAsync(_selectedModel!, _chatHistory))
             {
                 if (!firstChunkReceived)
                 {
@@ -1132,6 +1134,13 @@ public class AppRunner : IDisposable
 
             string completeResponse = responseBuilder.ToString();
 
+            // 2. Add Model Response to History
+            _chatHistory.Add(new Content
+            {
+                Role = "model",
+                Parts = [new Part { Text = completeResponse }]
+            });
+
             // Log response
             _conversationLogger.LogResponse(completeResponse, totalTimer.Elapsed, _selectedModel!);
 
@@ -1149,6 +1158,12 @@ public class AppRunner : IDisposable
         }
         catch (Exception ex)
         {
+            // If request fails, remove the last user prompt so the history doesn't get out of sync/corrupted
+            if (_chatHistory.Count > 0 && _chatHistory.Last().Role == "user")
+            {
+                _chatHistory.RemoveAt(_chatHistory.Count - 1);
+            }
+
             _conversationLogger.LogError(ex, _selectedModel!, prompt);
             HandleException(ex);
         }
@@ -1163,18 +1178,24 @@ public class AppRunner : IDisposable
             animationTask = ShowProgressAnimation();
             var totalTimer = Stopwatch.StartNew();
 
-            string? result = await _geminiClient.GenerateContentAsync(_selectedModel!, prompt);
+            // Pass full history here
+            string? result = await _geminiClient.GenerateContentAsync(_selectedModel!, _chatHistory);
 
             totalTimer.Stop();
             _isAnimating = false;
             if (animationTask != null) await animationTask;
-
             Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
 
             if (result != null)
             {
-                _conversationLogger.LogResponse(result, totalTimer.Elapsed, _selectedModel!);
+                // 2. Add Model Response to History
+                _chatHistory.Add(new Content
+                {
+                    Role = "model",
+                    Parts = [new Part { Text = result }]
+                });
 
+                _conversationLogger.LogResponse(result, totalTimer.Elapsed, _selectedModel!);
                 var metrics = new ResponseMetrics
                 {
                     Model = _selectedModel!,
@@ -1189,6 +1210,9 @@ public class AppRunner : IDisposable
             }
             else
             {
+                // Rollback history on empty response
+                if (_chatHistory.Count > 0) _chatHistory.RemoveAt(_chatHistory.Count - 1);
+
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine($"⚠ No response received (took {FormatElapsedTime(totalTimer.Elapsed)})");
                 Console.ResetColor();
@@ -1196,6 +1220,9 @@ public class AppRunner : IDisposable
         }
         catch (Exception ex)
         {
+            // Rollback history on error
+            if (_chatHistory.Count > 0) _chatHistory.RemoveAt(_chatHistory.Count - 1);
+
             _conversationLogger.LogError(ex, _selectedModel!, prompt);
             _isAnimating = false;
             if (animationTask != null) await animationTask;
@@ -1231,6 +1258,37 @@ public class AppRunner : IDisposable
             Console.WriteLine($"\n❌ Unexpected Error: {ex.Message}");
             Console.ResetColor();
             _logger.LogError(ex, "Error during content generation");
+        }
+    }
+
+    private void OpenLogFolder()
+    {
+        try
+        {
+            string logDirectory = _conversationLogger.GetLogDirectory();
+            if (OperatingSystem.IsWindows())
+            {
+                Process.Start("explorer.exe", logDirectory);
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                Process.Start("open", logDirectory);
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                Process.Start("xdg-open", logDirectory);
+            }
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"✓ Opened log folder: {logDirectory}");
+            Console.ResetColor();
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"⚠ Could not open folder: {ex.Message}");
+            Console.WriteLine($"📁 Log location: {_conversationLogger.GetLogDirectory()}");
+            Console.ResetColor();
         }
     }
 
@@ -1283,7 +1341,6 @@ public class AppRunner : IDisposable
         Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
         Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
         Console.WriteLine($"   └─ Mode: 🌊 Streaming (real-time)");
-
         if (_sessionMetrics.Count > 1)
         {
             var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
@@ -1303,7 +1360,6 @@ public class AppRunner : IDisposable
         Console.WriteLine($"   └─ Response Time: {FormatElapsedTime(metrics.ElapsedTime)}");
         Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
         Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
-
         if (_sessionMetrics.Count > 1)
         {
             var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
@@ -1354,11 +1410,11 @@ public class AppRunner : IDisposable
         Console.WriteLine($"  📝 Total Output: {totalChars:N0} characters");
         Console.WriteLine($"  ⏰ Session Duration: {FormatElapsedTime(sessionDuration)}");
         Console.WriteLine($"  🌊 Streaming: {(_streamingEnabled ? "Enabled" : "Disabled")}");
+        Console.WriteLine($"  💭 Context Depth: {_chatHistory.Count / 2} turns");
 
         var modelUsage = _sessionMetrics.GroupBy(m => m.Model)
             .Select(g => new { Model = g.Key, Count = g.Count(), AvgTime = g.Average(m => m.ElapsedTime.TotalSeconds) })
             .OrderByDescending(m => m.Count);
-
         Console.WriteLine("\n  🤖 Models Used:");
         foreach (var usage in modelUsage)
         {
@@ -1369,7 +1425,6 @@ public class AppRunner : IDisposable
         Console.WriteLine("╚════════════════════════╝");
         Console.ResetColor();
 
-        // Log stats
         var modelUsageDict = modelUsage.ToDictionary(m => m.Model, m => m.Count);
         _conversationLogger.LogSessionStats(totalRequests, avgResponseTime, sessionDuration, modelUsageDict);
     }
@@ -2063,11 +2118,11 @@ public class Program
 
 ================================================================================
 FILE: GeminiClient/GeminiApiClient.cs
-SIZE: 8.09 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 7.99 KB
+MODIFIED: 2025-12-24 15:11:44
 ================================================================================
 
-﻿// GeminiClient/GeminiApiClient.cs (Updated for streaming support)
+﻿// GeminiClient/GeminiApiClient.cs
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -2100,10 +2155,22 @@ public class GeminiApiClient : IGeminiApiClient
         }
     }
 
-    public async Task<string?> GenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default)
+    // Convenience method for single-turn (stateless) requests
+    public Task<string?> GenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        // Create a single-turn history
+        List<Content> history = [
+            new Content { Role = "user", Parts = [new Part { Text = prompt }] }
+        ];
+        return GenerateContentAsync(modelName, history, cancellationToken);
+    }
+
+    // Multi-turn (stateful) implementation
+    public async Task<string?> GenerateContentAsync(string modelName, List<Content> history, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        ArgumentNullException.ThrowIfNull(history);
 
         string? apiKey = _options.ApiKey;
         string path = $"/v1beta/models/{modelName}:generateContent";
@@ -2116,10 +2183,10 @@ public class GeminiApiClient : IGeminiApiClient
 
         var requestBody = new GeminiRequest
         {
-            Contents = [new Content { Parts = [new Part { Text = prompt }] }]
+            Contents = history
         };
 
-        _logger.LogInformation("Sending request to Gemini API: {Uri}", requestUri);
+        _logger.LogInformation("Sending request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
 
         try
         {
@@ -2127,6 +2194,7 @@ public class GeminiApiClient : IGeminiApiClient
             using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
 
             using HttpResponseMessage response = await _httpClient.PostAsync(requestUri, jsonContent, cancellationToken);
+
             if (!response.IsSuccessStatusCode)
             {
                 string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -2142,69 +2210,66 @@ public class GeminiApiClient : IGeminiApiClient
             _logger.LogInformation("Successfully received response from Gemini API.");
             return generatedText;
         }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "HTTP request error calling Gemini API.");
-            throw;
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogError(ex, "Error deserializing Gemini API response.");
-            throw new InvalidOperationException("Failed to deserialize Gemini API response.", ex);
-        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unexpected error occurred while calling Gemini API.");
+            _logger.LogError(ex, "Error calling Gemini API.");
             throw;
         }
     }
 
+    // Convenience method for single-turn streaming
+    public IAsyncEnumerable<string> StreamGenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        List<Content> history = [
+            new Content { Role = "user", Parts = [new Part { Text = prompt }] }
+        ];
+        return StreamGenerateContentAsync(modelName, history, cancellationToken);
+    }
+
+    // Multi-turn (stateful) streaming implementation
     public async IAsyncEnumerable<string> StreamGenerateContentAsync(
         string modelName,
-        string prompt,
+        List<Content> history,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        ArgumentNullException.ThrowIfNull(history);
 
         string? apiKey = _options.ApiKey;
         string path = $"/v1beta/models/{modelName}:streamGenerateContent";
         var uriBuilder = new UriBuilder(_httpClient.BaseAddress!)
         {
             Path = path,
-            Query = $"key={HttpUtility.UrlEncode(apiKey)}&alt=sse" // Request SSE format
+            Query = $"key={HttpUtility.UrlEncode(apiKey)}&alt=sse"
         };
         Uri requestUri = uriBuilder.Uri;
 
         var requestBody = new GeminiRequest
         {
-            Contents = [new Content { Parts = [new Part { Text = prompt }] }]
+            Contents = history
         };
 
-        _logger.LogInformation("Sending streaming request to Gemini API: {Uri}", requestUri);
-
-        // Setup the request - handle errors before yielding
-        HttpResponseMessage response;
-        Stream stream;
-        StreamReader reader;
+        _logger.LogInformation("Sending streaming request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
 
         string jsonString = JsonSerializer.Serialize(requestBody, GeminiJsonContext.Default.GeminiRequest);
         using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
-
         using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
         {
             Content = jsonContent
         };
 
-        // Add SSE headers
         request.Headers.Accept.Clear();
         request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
 
+        HttpResponseMessage response;
+        Stream stream;
+        StreamReader reader;
+
         try
         {
             response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
             if (!response.IsSuccessStatusCode)
             {
                 string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -2216,18 +2281,12 @@ public class GeminiApiClient : IGeminiApiClient
             stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             reader = new StreamReader(stream);
         }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "HTTP request error calling Gemini API streaming endpoint.");
-            throw;
-        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unexpected error occurred while streaming from Gemini API.");
+            _logger.LogError(ex, "Error initializing stream from Gemini API.");
             throw;
         }
 
-        // Process SSE stream - no try-catch around yield statements
         using (response)
         using (stream)
         using (reader)
@@ -2235,20 +2294,13 @@ public class GeminiApiClient : IGeminiApiClient
             string? line;
             while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
-                // Skip empty lines and comments
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith(':'))
-                    continue;
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith(':')) continue;
 
-                // Parse SSE format: "data: {json}"
                 if (line.StartsWith("data: "))
                 {
-                    string jsonData = line.Substring(6); // Remove "data: " prefix
+                    string jsonData = line.Substring(6);
+                    if (jsonData == "[DONE]") break;
 
-                    // Check for end of stream
-                    if (jsonData == "[DONE]")
-                        break;
-
-                    // Parse JSON and extract text chunk
                     string? textChunk = null;
                     try
                     {
@@ -2257,8 +2309,8 @@ public class GeminiApiClient : IGeminiApiClient
                     }
                     catch (JsonException ex)
                     {
-                        _logger.LogWarning(ex, "Failed to parse SSE data: {JsonData}", jsonData);
-                        continue; // Skip this chunk and continue
+                        _logger.LogWarning(ex, "Failed to parse SSE data.");
+                        continue;
                     }
 
                     if (!string.IsNullOrEmpty(textChunk))
@@ -2269,7 +2321,7 @@ public class GeminiApiClient : IGeminiApiClient
             }
         }
 
-        _logger.LogInformation("Successfully completed streaming from Gemini API.");
+        _logger.LogInformation("Successfully completed streaming.");
     }
 }
 
@@ -2432,36 +2484,42 @@ MODIFIED: 2025-12-24 14:22:06
 
 ================================================================================
 FILE: GeminiClient/IGeminiApiClient.cs
-SIZE: 1.62 KB
-MODIFIED: 2025-12-24 13:20:31
+SIZE: 1.51 KB
+MODIFIED: 2025-12-24 15:10:43
 ================================================================================
 
 ﻿// GeminiClient/IGeminiApiClient.cs
+using GeminiClient.Models;
+
 namespace GeminiClient;
 
 public interface IGeminiApiClient
 {
     /// <summary>
-    /// Generates content using the specified Gemini model and prompt.
+    /// Generates content using the specified Gemini model and prompt (single-turn).
     /// </summary>
-    /// <param name="modelName">The name of the model (e.g., "gemini-2.0-flash").</param>
-    /// <param name="prompt">The text prompt for content generation.</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    /// <returns>The generated text content or null if no content was generated.</returns>
-    /// <exception cref="HttpRequestException">Thrown if the API request fails.</exception>
-    /// <exception cref="ArgumentException">Thrown if required configuration is missing.</exception>
     Task<string?> GenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Generates content using streaming, yielding text chunks as they arrive.
+    /// Generates content providing full conversation history (multi-turn).
     /// </summary>
-    /// <param name="modelName">The name of the model (e.g., "gemini-2.0-flash").</param>
-    /// <param name="prompt">The text prompt for content generation.</param>
-    /// <param name="cancellationToken">A token to cancel the asynchronous operation.</param>
-    /// <returns>An async enumerable of text chunks as they're generated.</returns>
-    /// <exception cref="HttpRequestException">Thrown if the API request fails.</exception>
-    /// <exception cref="ArgumentException">Thrown if required configuration is missing.</exception>
+    /// <param name="modelName">The name of the model.</param>
+    /// <param name="history">The list of previous chat turns (user and model).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<string?> GenerateContentAsync(string modelName, List<Content> history, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates content using streaming (single-turn).
+    /// </summary>
     IAsyncEnumerable<string> StreamGenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Generates content using streaming with full conversation history (multi-turn).
+    /// </summary>
+    /// <param name="modelName">The name of the model.</param>
+    /// <param name="history">The list of previous chat turns (user and model).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    IAsyncEnumerable<string> StreamGenerateContentAsync(string modelName, List<Content> history, CancellationToken cancellationToken = default);
 }
 
 
@@ -2783,8 +2841,8 @@ public class ModelsListResponse
 
 ================================================================================
 FILE: GeminiClient/Models/GeminiRequest.cs
-SIZE: .43 KB
-MODIFIED: 2025-12-24 13:20:31
+SIZE: .50 KB
+MODIFIED: 2025-12-24 15:10:29
 ================================================================================
 
 ﻿// GeminiClient/Models/GeminiRequest.cs
@@ -2800,6 +2858,9 @@ public class GeminiRequest
 
 public class Content
 {
+    [JsonPropertyName("role")]
+    public string? Role { get; set; }
+
     [JsonPropertyName("parts")]
     public List<Part> Parts { get; set; } = [];
 }
@@ -4085,7 +4146,7 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 
 ===============================================================================
-EXPORT COMPLETED: Wed Dec 24 03:07:11 PM CST 2025
+EXPORT COMPLETED: Wed Dec 24 03:11:46 PM CST 2025
 Total Files Found: 33
 Files Exported: 33
 Files Skipped: 0 (binary or large files)

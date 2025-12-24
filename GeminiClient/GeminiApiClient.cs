@@ -1,4 +1,4 @@
-﻿// GeminiClient/GeminiApiClient.cs (Updated for streaming support)
+﻿// GeminiClient/GeminiApiClient.cs
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -31,10 +31,22 @@ public class GeminiApiClient : IGeminiApiClient
         }
     }
 
-    public async Task<string?> GenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default)
+    // Convenience method for single-turn (stateless) requests
+    public Task<string?> GenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        // Create a single-turn history
+        List<Content> history = [
+            new Content { Role = "user", Parts = [new Part { Text = prompt }] }
+        ];
+        return GenerateContentAsync(modelName, history, cancellationToken);
+    }
+
+    // Multi-turn (stateful) implementation
+    public async Task<string?> GenerateContentAsync(string modelName, List<Content> history, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        ArgumentNullException.ThrowIfNull(history);
 
         string? apiKey = _options.ApiKey;
         string path = $"/v1beta/models/{modelName}:generateContent";
@@ -47,10 +59,10 @@ public class GeminiApiClient : IGeminiApiClient
 
         var requestBody = new GeminiRequest
         {
-            Contents = [new Content { Parts = [new Part { Text = prompt }] }]
+            Contents = history
         };
 
-        _logger.LogInformation("Sending request to Gemini API: {Uri}", requestUri);
+        _logger.LogInformation("Sending request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
 
         try
         {
@@ -58,6 +70,7 @@ public class GeminiApiClient : IGeminiApiClient
             using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
 
             using HttpResponseMessage response = await _httpClient.PostAsync(requestUri, jsonContent, cancellationToken);
+
             if (!response.IsSuccessStatusCode)
             {
                 string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -73,69 +86,66 @@ public class GeminiApiClient : IGeminiApiClient
             _logger.LogInformation("Successfully received response from Gemini API.");
             return generatedText;
         }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "HTTP request error calling Gemini API.");
-            throw;
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogError(ex, "Error deserializing Gemini API response.");
-            throw new InvalidOperationException("Failed to deserialize Gemini API response.", ex);
-        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unexpected error occurred while calling Gemini API.");
+            _logger.LogError(ex, "Error calling Gemini API.");
             throw;
         }
     }
 
+    // Convenience method for single-turn streaming
+    public IAsyncEnumerable<string> StreamGenerateContentAsync(string modelName, string prompt, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        List<Content> history = [
+            new Content { Role = "user", Parts = [new Part { Text = prompt }] }
+        ];
+        return StreamGenerateContentAsync(modelName, history, cancellationToken);
+    }
+
+    // Multi-turn (stateful) streaming implementation
     public async IAsyncEnumerable<string> StreamGenerateContentAsync(
         string modelName,
-        string prompt,
+        List<Content> history,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
-        ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
+        ArgumentNullException.ThrowIfNull(history);
 
         string? apiKey = _options.ApiKey;
         string path = $"/v1beta/models/{modelName}:streamGenerateContent";
         var uriBuilder = new UriBuilder(_httpClient.BaseAddress!)
         {
             Path = path,
-            Query = $"key={HttpUtility.UrlEncode(apiKey)}&alt=sse" // Request SSE format
+            Query = $"key={HttpUtility.UrlEncode(apiKey)}&alt=sse"
         };
         Uri requestUri = uriBuilder.Uri;
 
         var requestBody = new GeminiRequest
         {
-            Contents = [new Content { Parts = [new Part { Text = prompt }] }]
+            Contents = history
         };
 
-        _logger.LogInformation("Sending streaming request to Gemini API: {Uri}", requestUri);
-
-        // Setup the request - handle errors before yielding
-        HttpResponseMessage response;
-        Stream stream;
-        StreamReader reader;
+        _logger.LogInformation("Sending streaming request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
 
         string jsonString = JsonSerializer.Serialize(requestBody, GeminiJsonContext.Default.GeminiRequest);
         using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
-
         using var request = new HttpRequestMessage(HttpMethod.Post, requestUri)
         {
             Content = jsonContent
         };
 
-        // Add SSE headers
         request.Headers.Accept.Clear();
         request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
 
+        HttpResponseMessage response;
+        Stream stream;
+        StreamReader reader;
+
         try
         {
             response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-
             if (!response.IsSuccessStatusCode)
             {
                 string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -147,18 +157,12 @@ public class GeminiApiClient : IGeminiApiClient
             stream = await response.Content.ReadAsStreamAsync(cancellationToken);
             reader = new StreamReader(stream);
         }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogError(ex, "HTTP request error calling Gemini API streaming endpoint.");
-            throw;
-        }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "An unexpected error occurred while streaming from Gemini API.");
+            _logger.LogError(ex, "Error initializing stream from Gemini API.");
             throw;
         }
 
-        // Process SSE stream - no try-catch around yield statements
         using (response)
         using (stream)
         using (reader)
@@ -166,20 +170,13 @@ public class GeminiApiClient : IGeminiApiClient
             string? line;
             while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
-                // Skip empty lines and comments
-                if (string.IsNullOrWhiteSpace(line) || line.StartsWith(':'))
-                    continue;
+                if (string.IsNullOrWhiteSpace(line) || line.StartsWith(':')) continue;
 
-                // Parse SSE format: "data: {json}"
                 if (line.StartsWith("data: "))
                 {
-                    string jsonData = line.Substring(6); // Remove "data: " prefix
+                    string jsonData = line.Substring(6);
+                    if (jsonData == "[DONE]") break;
 
-                    // Check for end of stream
-                    if (jsonData == "[DONE]")
-                        break;
-
-                    // Parse JSON and extract text chunk
                     string? textChunk = null;
                     try
                     {
@@ -188,8 +185,8 @@ public class GeminiApiClient : IGeminiApiClient
                     }
                     catch (JsonException ex)
                     {
-                        _logger.LogWarning(ex, "Failed to parse SSE data: {JsonData}", jsonData);
-                        continue; // Skip this chunk and continue
+                        _logger.LogWarning(ex, "Failed to parse SSE data.");
+                        continue;
                     }
 
                     if (!string.IsNullOrEmpty(textChunk))
@@ -200,6 +197,6 @@ public class GeminiApiClient : IGeminiApiClient
             }
         }
 
-        _logger.LogInformation("Successfully completed streaming from Gemini API.");
+        _logger.LogInformation("Successfully completed streaming.");
     }
 }

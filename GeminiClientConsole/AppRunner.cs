@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Text;
 using GeminiClient;
+using GeminiClient.Models;
 using Microsoft.Extensions.Logging;
 
 namespace GeminiClientConsole;
@@ -12,8 +13,12 @@ public class AppRunner : IDisposable
     private readonly ILogger<AppRunner> _logger;
     private readonly ConsoleModelSelector _modelSelector;
     private readonly ConversationLogger _conversationLogger;
+
+    // State Management
     private string? _selectedModel;
     private readonly List<ResponseMetrics> _sessionMetrics = [];
+    private readonly List<Content> _chatHistory = []; // Main conversation state
+
     private bool _streamingEnabled = true;
     private bool _disposed;
 
@@ -33,7 +38,6 @@ public class AppRunner : IDisposable
     {
         _logger.LogInformation("Application starting...");
 
-        // Display log file location
         Console.ForegroundColor = ConsoleColor.DarkCyan;
         Console.WriteLine($"📝 Conversation log: {_conversationLogger.GetLogFilePath()}");
         Console.ResetColor();
@@ -44,11 +48,29 @@ public class AppRunner : IDisposable
 
         while (true)
         {
-            Console.WriteLine($"\n📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for stats, 'log' to open logs, 'stream' to toggle streaming: {(_streamingEnabled ? "ON" : "OFF")}):");
+            Console.WriteLine($"\n📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [{(_streamingEnabled ? "ON" : "OFF")}]):");
+
+            // Visual indicator for context depth
+            if (_chatHistory.Count > 0)
+            {
+                Console.ForegroundColor = ConsoleColor.DarkGray;
+                Console.WriteLine($"   (Context: {_chatHistory.Count / 2} turns)");
+                Console.ResetColor();
+            }
+
             Console.Write("> ");
             string? input = Console.ReadLine();
 
-            if (string.Equals(input, "exit", StringComparison.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("⚠ Prompt cannot be empty");
+                Console.ResetColor();
+                continue;
+            }
+
+            // Commands
+            if (input.Equals("exit", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("exit");
                 DisplaySessionSummary();
@@ -56,28 +78,38 @@ public class AppRunner : IDisposable
                 break;
             }
 
-            if (string.Equals(input, "model", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("reset", StringComparison.OrdinalIgnoreCase))
+            {
+                _conversationLogger.LogCommand("reset");
+                _chatHistory.Clear();
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine("✨ Conversation context cleared. Starting fresh.");
+                Console.ResetColor();
+                continue;
+            }
+
+            if (input.Equals("model", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("model");
                 _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
                 continue;
             }
 
-            if (string.Equals(input, "stats", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("stats", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("stats");
                 DisplaySessionSummary();
                 continue;
             }
 
-            if (string.Equals(input, "log", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("log", StringComparison.OrdinalIgnoreCase))
             {
                 _conversationLogger.LogCommand("log");
                 OpenLogFolder();
                 continue;
             }
 
-            if (string.Equals(input, "stream", StringComparison.OrdinalIgnoreCase))
+            if (input.Equals("stream", StringComparison.OrdinalIgnoreCase))
             {
                 _streamingEnabled = !_streamingEnabled;
                 _conversationLogger.LogCommand($"stream ({(_streamingEnabled ? "enabled" : "disabled")})");
@@ -87,13 +119,13 @@ public class AppRunner : IDisposable
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(input))
+            // Processing
+            // 1. Add User Prompt to History
+            _chatHistory.Add(new Content
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("⚠ Prompt cannot be empty");
-                Console.ResetColor();
-                continue;
-            }
+                Role = "user",
+                Parts = [new Part { Text = input }]
+            });
 
             if (_streamingEnabled)
             {
@@ -106,37 +138,6 @@ public class AppRunner : IDisposable
         }
 
         _logger.LogInformation("Application finished");
-    }
-
-    private void OpenLogFolder()
-    {
-        try
-        {
-            string logDirectory = _conversationLogger.GetLogDirectory();
-            if (OperatingSystem.IsWindows())
-            {
-                Process.Start("explorer.exe", logDirectory);
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Process.Start("open", logDirectory);
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                Process.Start("xdg-open", logDirectory);
-            }
-
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"✓ Opened log folder: {logDirectory}");
-            Console.ResetColor();
-        }
-        catch (Exception ex)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"⚠ Could not open folder: {ex.Message}");
-            Console.WriteLine($"📁 Log location: {_conversationLogger.GetLogDirectory()}");
-            Console.ResetColor();
-        }
     }
 
     private async Task ProcessPromptStreamingAsync(string prompt)
@@ -153,7 +154,8 @@ public class AppRunner : IDisposable
             var responseBuilder = new StringBuilder();
             bool firstChunkReceived = false;
 
-            await foreach (string chunk in _geminiClient.StreamGenerateContentAsync(_selectedModel!, prompt))
+            // Pass full history here instead of just 'prompt'
+            await foreach (string chunk in _geminiClient.StreamGenerateContentAsync(_selectedModel!, _chatHistory))
             {
                 if (!firstChunkReceived)
                 {
@@ -176,6 +178,13 @@ public class AppRunner : IDisposable
 
             string completeResponse = responseBuilder.ToString();
 
+            // 2. Add Model Response to History
+            _chatHistory.Add(new Content
+            {
+                Role = "model",
+                Parts = [new Part { Text = completeResponse }]
+            });
+
             // Log response
             _conversationLogger.LogResponse(completeResponse, totalTimer.Elapsed, _selectedModel!);
 
@@ -193,6 +202,12 @@ public class AppRunner : IDisposable
         }
         catch (Exception ex)
         {
+            // If request fails, remove the last user prompt so the history doesn't get out of sync/corrupted
+            if (_chatHistory.Count > 0 && _chatHistory.Last().Role == "user")
+            {
+                _chatHistory.RemoveAt(_chatHistory.Count - 1);
+            }
+
             _conversationLogger.LogError(ex, _selectedModel!, prompt);
             HandleException(ex);
         }
@@ -207,18 +222,24 @@ public class AppRunner : IDisposable
             animationTask = ShowProgressAnimation();
             var totalTimer = Stopwatch.StartNew();
 
-            string? result = await _geminiClient.GenerateContentAsync(_selectedModel!, prompt);
+            // Pass full history here
+            string? result = await _geminiClient.GenerateContentAsync(_selectedModel!, _chatHistory);
 
             totalTimer.Stop();
             _isAnimating = false;
             if (animationTask != null) await animationTask;
-
             Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
 
             if (result != null)
             {
-                _conversationLogger.LogResponse(result, totalTimer.Elapsed, _selectedModel!);
+                // 2. Add Model Response to History
+                _chatHistory.Add(new Content
+                {
+                    Role = "model",
+                    Parts = [new Part { Text = result }]
+                });
 
+                _conversationLogger.LogResponse(result, totalTimer.Elapsed, _selectedModel!);
                 var metrics = new ResponseMetrics
                 {
                     Model = _selectedModel!,
@@ -233,6 +254,9 @@ public class AppRunner : IDisposable
             }
             else
             {
+                // Rollback history on empty response
+                if (_chatHistory.Count > 0) _chatHistory.RemoveAt(_chatHistory.Count - 1);
+
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine($"⚠ No response received (took {FormatElapsedTime(totalTimer.Elapsed)})");
                 Console.ResetColor();
@@ -240,6 +264,9 @@ public class AppRunner : IDisposable
         }
         catch (Exception ex)
         {
+            // Rollback history on error
+            if (_chatHistory.Count > 0) _chatHistory.RemoveAt(_chatHistory.Count - 1);
+
             _conversationLogger.LogError(ex, _selectedModel!, prompt);
             _isAnimating = false;
             if (animationTask != null) await animationTask;
@@ -275,6 +302,37 @@ public class AppRunner : IDisposable
             Console.WriteLine($"\n❌ Unexpected Error: {ex.Message}");
             Console.ResetColor();
             _logger.LogError(ex, "Error during content generation");
+        }
+    }
+
+    private void OpenLogFolder()
+    {
+        try
+        {
+            string logDirectory = _conversationLogger.GetLogDirectory();
+            if (OperatingSystem.IsWindows())
+            {
+                Process.Start("explorer.exe", logDirectory);
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                Process.Start("open", logDirectory);
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                Process.Start("xdg-open", logDirectory);
+            }
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"✓ Opened log folder: {logDirectory}");
+            Console.ResetColor();
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"⚠ Could not open folder: {ex.Message}");
+            Console.WriteLine($"📁 Log location: {_conversationLogger.GetLogDirectory()}");
+            Console.ResetColor();
         }
     }
 
@@ -327,7 +385,6 @@ public class AppRunner : IDisposable
         Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
         Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
         Console.WriteLine($"   └─ Mode: 🌊 Streaming (real-time)");
-
         if (_sessionMetrics.Count > 1)
         {
             var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
@@ -347,7 +404,6 @@ public class AppRunner : IDisposable
         Console.WriteLine($"   └─ Response Time: {FormatElapsedTime(metrics.ElapsedTime)}");
         Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
         Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
-
         if (_sessionMetrics.Count > 1)
         {
             var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
@@ -398,11 +454,11 @@ public class AppRunner : IDisposable
         Console.WriteLine($"  📝 Total Output: {totalChars:N0} characters");
         Console.WriteLine($"  ⏰ Session Duration: {FormatElapsedTime(sessionDuration)}");
         Console.WriteLine($"  🌊 Streaming: {(_streamingEnabled ? "Enabled" : "Disabled")}");
+        Console.WriteLine($"  💭 Context Depth: {_chatHistory.Count / 2} turns");
 
         var modelUsage = _sessionMetrics.GroupBy(m => m.Model)
             .Select(g => new { Model = g.Key, Count = g.Count(), AvgTime = g.Average(m => m.ElapsedTime.TotalSeconds) })
             .OrderByDescending(m => m.Count);
-
         Console.WriteLine("\n  🤖 Models Used:");
         foreach (var usage in modelUsage)
         {
@@ -413,7 +469,6 @@ public class AppRunner : IDisposable
         Console.WriteLine("╚════════════════════════╝");
         Console.ResetColor();
 
-        // Log stats
         var modelUsageDict = modelUsage.ToDictionary(m => m.Model, m => m.Count);
         _conversationLogger.LogSessionStats(totalRequests, avgResponseTime, sessionDuration, modelUsageDict);
     }
