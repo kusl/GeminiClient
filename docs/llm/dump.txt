@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Wed Dec 24 02:36:05 PM CST 2025
+Generated: Wed Dec 24 02:53:05 PM CST 2025
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -10,6 +10,7 @@ DIRECTORY STRUCTURE:
 .
 ├── docs
 │   ├── llm
+│   │   ├── collabskus_dump.txt
 │   │   ├── dump.txt
 │   │   └── gemini.md
 │   └── claude.md
@@ -35,6 +36,7 @@ DIRECTORY STRUCTURE:
 │   ├── AppRunner.cs
 │   ├── appsettings.json
 │   ├── ConsoleModelSelector.cs
+│   ├── ConversationLogger.cs
 │   ├── GeminiClientConsole.csproj
 │   └── Program.cs
 ├── .github
@@ -948,11 +950,11 @@ echo ""
 
 ================================================================================
 FILE: GeminiClientConsole/AppRunner.cs
-SIZE: 16.83 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 17.18 KB
+MODIFIED: 2025-12-24 14:53:03
 ================================================================================
 
-﻿// GeminiClientConsole/AppRunner.cs (Console-specific UI component)
+﻿// GeminiClientConsole/AppRunner.cs
 using System.Diagnostics;
 using System.Text;
 using GeminiClient;
@@ -960,33 +962,51 @@ using Microsoft.Extensions.Logging;
 
 namespace GeminiClientConsole;
 
-public class AppRunner(
-    IGeminiApiClient geminiClient,
-    ILogger<AppRunner> logger,
-    ConsoleModelSelector modelSelector)
+public class AppRunner : IDisposable
 {
-    private readonly IGeminiApiClient _geminiClient = geminiClient;
-    private readonly ILogger<AppRunner> _logger = logger;
-    private readonly ConsoleModelSelector _modelSelector = modelSelector;
+    private readonly IGeminiApiClient _geminiClient;
+    private readonly ILogger<AppRunner> _logger;
+    private readonly ConsoleModelSelector _modelSelector;
+    private readonly ConversationLogger _conversationLogger;
     private string? _selectedModel;
     private readonly List<ResponseMetrics> _sessionMetrics = [];
-    private bool _streamingEnabled = true; // Default to streaming
+    private bool _streamingEnabled = true;
+    private bool _disposed;
+
+    public AppRunner(
+        IGeminiApiClient geminiClient,
+        ILogger<AppRunner> logger,
+        ConsoleModelSelector modelSelector,
+        ConversationLogger conversationLogger)
+    {
+        _geminiClient = geminiClient;
+        _logger = logger;
+        _modelSelector = modelSelector;
+        _conversationLogger = conversationLogger;
+    }
 
     public async Task RunAsync()
     {
         _logger.LogInformation("Application starting...");
+
+        // Display log file location
+        Console.ForegroundColor = ConsoleColor.DarkCyan;
+        Console.WriteLine($"📝 Conversation log: {_conversationLogger.GetLogFilePath()}");
+        Console.ResetColor();
+        Console.WriteLine();
 
         // Select model at startup
         _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
 
         while (true)
         {
-            Console.WriteLine($"\n📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for session stats, 'stream' to toggle streaming: {(_streamingEnabled ? "ON" : "OFF")}):");
+            Console.WriteLine($"\n📝 Enter prompt ('exit' to quit, 'model' to change model, 'stats' for stats, 'log' to open logs, 'stream' to toggle streaming: {(_streamingEnabled ? "ON" : "OFF")}):");
             Console.Write("> ");
             string? input = Console.ReadLine();
 
             if (string.Equals(input, "exit", StringComparison.OrdinalIgnoreCase))
             {
+                _conversationLogger.LogCommand("exit");
                 DisplaySessionSummary();
                 Console.WriteLine("\nGoodbye! 👋");
                 break;
@@ -994,19 +1014,29 @@ public class AppRunner(
 
             if (string.Equals(input, "model", StringComparison.OrdinalIgnoreCase))
             {
+                _conversationLogger.LogCommand("model");
                 _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
                 continue;
             }
 
             if (string.Equals(input, "stats", StringComparison.OrdinalIgnoreCase))
             {
+                _conversationLogger.LogCommand("stats");
                 DisplaySessionSummary();
+                continue;
+            }
+
+            if (string.Equals(input, "log", StringComparison.OrdinalIgnoreCase))
+            {
+                _conversationLogger.LogCommand("log");
+                OpenLogFolder();
                 continue;
             }
 
             if (string.Equals(input, "stream", StringComparison.OrdinalIgnoreCase))
             {
                 _streamingEnabled = !_streamingEnabled;
+                _conversationLogger.LogCommand($"stream ({(_streamingEnabled ? "enabled" : "disabled")})");
                 Console.ForegroundColor = ConsoleColor.Green;
                 Console.WriteLine($"✓ Streaming {(_streamingEnabled ? "enabled" : "disabled")}");
                 Console.ResetColor();
@@ -1034,11 +1064,43 @@ public class AppRunner(
         _logger.LogInformation("Application finished");
     }
 
-    private async Task ProcessPromptStreamingAsync(string prompt)
+    private void OpenLogFolder()
     {
         try
         {
-            // Display response header
+            string logDirectory = _conversationLogger.GetLogDirectory();
+            if (OperatingSystem.IsWindows())
+            {
+                Process.Start("explorer.exe", logDirectory);
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                Process.Start("open", logDirectory);
+            }
+            else if (OperatingSystem.IsLinux())
+            {
+                Process.Start("xdg-open", logDirectory);
+            }
+
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine($"✓ Opened log folder: {logDirectory}");
+            Console.ResetColor();
+        }
+        catch (Exception ex)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine($"⚠ Could not open folder: {ex.Message}");
+            Console.WriteLine($"📁 Log location: {_conversationLogger.GetLogDirectory()}");
+            Console.ResetColor();
+        }
+    }
+
+    private async Task ProcessPromptStreamingAsync(string prompt)
+    {
+        _conversationLogger.LogPrompt(prompt, _selectedModel!, isStreaming: true);
+
+        try
+        {
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine($"\n╭─── Streaming Response ───╮");
             Console.ResetColor();
@@ -1052,28 +1114,27 @@ public class AppRunner(
                 if (!firstChunkReceived)
                 {
                     firstChunkReceived = true;
-                    // Display first chunk timing
                     Console.ForegroundColor = ConsoleColor.DarkGreen;
                     Console.WriteLine($"⚡ First response: {totalTimer.ElapsedMilliseconds}ms");
                     Console.ResetColor();
-                    Console.WriteLine(); // Add some spacing
+                    Console.WriteLine();
                 }
 
-                // Write chunk immediately to console
                 Console.Write(chunk);
                 responseBuilder.Append(chunk);
             }
 
             totalTimer.Stop();
-
-            // Add some spacing after the response
             Console.WriteLine();
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.WriteLine("╰────────────────╯");
             Console.ResetColor();
 
-            // Calculate and store metrics
             string completeResponse = responseBuilder.ToString();
+
+            // Log response
+            _conversationLogger.LogResponse(completeResponse, totalTimer.Elapsed, _selectedModel!);
+
             var metrics = new ResponseMetrics
             {
                 Model = _selectedModel!,
@@ -1084,62 +1145,36 @@ public class AppRunner(
             };
 
             _sessionMetrics.Add(metrics);
-
-            // Display performance metrics for streaming
             DisplayStreamingMetrics(metrics, completeResponse);
-        }
-        catch (HttpRequestException httpEx) when (httpEx.Message.Contains("500"))
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n❌ Server Error: The model '{_selectedModel}' is experiencing issues.");
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"💡 Tip: Try switching to a different model using the 'model' command.");
-            Console.WriteLine($"   Recommended stable models: gemini-2.5-flash, gemini-2.0-flash");
-            Console.ResetColor();
-
-            _logger.LogError(httpEx, "Server error from Gemini API");
-        }
-        catch (HttpRequestException httpEx)
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n❌ Network Error: {httpEx.Message}");
-            Console.ResetColor();
-
-            _logger.LogError(httpEx, "HTTP error during content generation");
         }
         catch (Exception ex)
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n❌ Unexpected Error: {ex.Message}");
-            Console.ResetColor();
-
-            _logger.LogError(ex, "Error during content generation");
+            _conversationLogger.LogError(ex, _selectedModel!, prompt);
+            HandleException(ex);
         }
     }
 
     private async Task ProcessPromptAsync(string prompt)
     {
+        _conversationLogger.LogPrompt(prompt, _selectedModel!, isStreaming: false);
         Task? animationTask = null;
         try
         {
-            // Display sending message with animation
             animationTask = ShowProgressAnimation();
-
-            // Start timing
             var totalTimer = Stopwatch.StartNew();
 
             string? result = await _geminiClient.GenerateContentAsync(_selectedModel!, prompt);
 
-            // Stop timing and animation
             totalTimer.Stop();
             _isAnimating = false;
             if (animationTask != null) await animationTask;
 
-            // Clear the animation line
             Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
 
             if (result != null)
             {
+                _conversationLogger.LogResponse(result, totalTimer.Elapsed, _selectedModel!);
+
                 var metrics = new ResponseMetrics
                 {
                     Model = _selectedModel!,
@@ -1148,7 +1183,6 @@ public class AppRunner(
                     ElapsedTime = totalTimer.Elapsed,
                     Timestamp = DateTime.Now
                 };
-
                 _sessionMetrics.Add(metrics);
 
                 DisplayResponse(result, metrics);
@@ -1160,52 +1194,47 @@ public class AppRunner(
                 Console.ResetColor();
             }
         }
-        catch (HttpRequestException httpEx) when (httpEx.Message.Contains("500"))
-        {
-            // Stop animation immediately
-            _isAnimating = false;
-            if (animationTask != null) await animationTask;
-            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
-
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"❌ Server Error: The model '{_selectedModel}' is experiencing issues.");
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"💡 Tip: Try switching to a different model using the 'model' command.");
-            Console.WriteLine($"   Recommended stable models: gemini-2.5-flash, gemini-2.0-flash");
-            Console.ResetColor();
-
-            _logger.LogError(httpEx, "Server error from Gemini API");
-        }
-        catch (HttpRequestException httpEx)
-        {
-            // Stop animation immediately
-            _isAnimating = false;
-            if (animationTask != null) await animationTask;
-            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
-
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"❌ Network Error: {httpEx.Message}");
-            Console.ResetColor();
-
-            _logger.LogError(httpEx, "HTTP error during content generation");
-        }
         catch (Exception ex)
         {
-            // Stop animation immediately
+            _conversationLogger.LogError(ex, _selectedModel!, prompt);
             _isAnimating = false;
             if (animationTask != null) await animationTask;
             Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+            HandleException(ex);
+        }
+    }
 
+    private void HandleException(Exception ex)
+    {
+        if (ex is HttpRequestException httpEx)
+        {
+            if (httpEx.Message.Contains("500"))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n❌ Server Error: The model '{_selectedModel}' is experiencing issues.");
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine($"💡 Tip: Try switching to a different model using the 'model' command.");
+                Console.ResetColor();
+                _logger.LogError(httpEx, "Server error from Gemini API");
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"\n❌ Network Error: {httpEx.Message}");
+                Console.ResetColor();
+                _logger.LogError(httpEx, "HTTP error during content generation");
+            }
+        }
+        else
+        {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"❌ Unexpected Error: {ex.Message}");
+            Console.WriteLine($"\n❌ Unexpected Error: {ex.Message}");
             Console.ResetColor();
-
             _logger.LogError(ex, "Error during content generation");
         }
     }
 
     private bool _isAnimating = false;
-
     private async Task ShowProgressAnimation()
     {
         _isAnimating = true;
@@ -1226,23 +1255,18 @@ public class AppRunner(
 
     private void DisplayResponse(string response, ResponseMetrics metrics)
     {
-        // Calculate metrics
         int wordCount = response.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
         double tokensPerSecond = EstimateTokens(response) / Math.Max(metrics.ElapsedTime.TotalSeconds, 0.001);
 
-        // Display response header with timing
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine($"\n╭─── Response ─── ⏱ {FormatElapsedTime(metrics.ElapsedTime)} ───╮");
         Console.ResetColor();
 
-        // Display the actual response
         Console.WriteLine(response);
-
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("╰────────────────╯");
         Console.ResetColor();
 
-        // Display performance metrics
         DisplayMetrics(metrics, wordCount, tokensPerSecond);
     }
 
@@ -1255,13 +1279,11 @@ public class AppRunner(
         Console.WriteLine($"📊 Streaming Performance Metrics:");
 
         string speedBar = CreateSpeedBar(tokensPerSecond);
-
         Console.WriteLine($"   └─ Total Time: {FormatElapsedTime(metrics.ElapsedTime)}");
         Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
         Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
         Console.WriteLine($"   └─ Mode: 🌊 Streaming (real-time)");
 
-        // Compare with session average if we have enough data
         if (_sessionMetrics.Count > 1)
         {
             var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
@@ -1277,14 +1299,11 @@ public class AppRunner(
         Console.ForegroundColor = ConsoleColor.DarkGray;
         Console.WriteLine($"📊 Performance Metrics:");
 
-        // Create a simple bar chart for visual representation
         string speedBar = CreateSpeedBar(tokensPerSecond);
-
         Console.WriteLine($"   └─ Response Time: {FormatElapsedTime(metrics.ElapsedTime)}");
         Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
         Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
 
-        // Compare with session average if we have enough data
         if (_sessionMetrics.Count > 1)
         {
             var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
@@ -1297,10 +1316,8 @@ public class AppRunner(
 
     private static string CreateSpeedBar(double tokensPerSecond)
     {
-        // Create a simple visual speed indicator
         int barLength = Math.Min((int)(tokensPerSecond / 10), 10);
         string bar = new string('█', barLength) + new string('░', 10 - barLength);
-
         string speedRating = tokensPerSecond switch
         {
             < 10 => "🐌",
@@ -1309,7 +1326,6 @@ public class AppRunner(
             < 100 => "🚀",
             _ => "⚡"
         };
-
         return $"[{bar}] {speedRating}";
     }
 
@@ -1324,7 +1340,6 @@ public class AppRunner(
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("\n╔═══ Session Statistics ═══╗");
         Console.ResetColor();
-
         int totalRequests = _sessionMetrics.Count;
         var avgResponseTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
         TimeSpan minResponseTime = _sessionMetrics.Min(m => m.ElapsedTime);
@@ -1340,7 +1355,6 @@ public class AppRunner(
         Console.WriteLine($"  ⏰ Session Duration: {FormatElapsedTime(sessionDuration)}");
         Console.WriteLine($"  🌊 Streaming: {(_streamingEnabled ? "Enabled" : "Disabled")}");
 
-        // Show model usage breakdown
         var modelUsage = _sessionMetrics.GroupBy(m => m.Model)
             .Select(g => new { Model = g.Key, Count = g.Count(), AvgTime = g.Average(m => m.ElapsedTime.TotalSeconds) })
             .OrderByDescending(m => m.Count);
@@ -1354,33 +1368,33 @@ public class AppRunner(
         Console.ForegroundColor = ConsoleColor.Cyan;
         Console.WriteLine("╚════════════════════════╝");
         Console.ResetColor();
+
+        // Log stats
+        var modelUsageDict = modelUsage.ToDictionary(m => m.Model, m => m.Count);
+        _conversationLogger.LogSessionStats(totalRequests, avgResponseTime, sessionDuration, modelUsageDict);
     }
 
     private static string FormatElapsedTime(TimeSpan elapsed)
     {
         if (elapsed.TotalMilliseconds < 1000)
-        {
             return $"{elapsed.TotalMilliseconds:F0}ms";
-        }
         else if (elapsed.TotalSeconds < 60)
-        {
             return $"{elapsed.TotalSeconds:F2}s";
-        }
         else
-        {
             return $"{elapsed.Minutes}m {elapsed.Seconds:D2}s";
+    }
+
+    private static int EstimateTokens(string text) => text.Length / 4;
+    private static int EstimateTokens(int charCount) => charCount / 4;
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            _conversationLogger?.Dispose();
+            _disposed = true;
         }
-    }
-
-    private static int EstimateTokens(string text)
-    {
-        // Rough estimation: ~1 token per 4 characters
-        return text.Length / 4;
-    }
-
-    private static int EstimateTokens(int charCount)
-    {
-        return charCount / 4;
+        GC.SuppressFinalize(this);
     }
 
     private class ResponseMetrics
@@ -1420,36 +1434,27 @@ MODIFIED: 2025-12-24 13:18:10
 
 ================================================================================
 FILE: GeminiClientConsole/ConsoleModelSelector.cs
-SIZE: 7.75 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 7.52 KB
+MODIFIED: 2025-12-24 14:51:09
 ================================================================================
 
-﻿// GeminiClientConsole/ConsoleModelSelector.cs (Console-specific UI component)
+﻿// GeminiClientConsole/ConsoleModelSelector.cs
 using GeminiClient;
+using GeminiClient.Models;
 using Microsoft.Extensions.Logging;
 
 namespace GeminiClientConsole;
 
 public class ConsoleModelSelector
 {
-    private readonly IGeminiApiClient _geminiClient;
+    private readonly IModelService _modelService;
     private readonly ILogger<ConsoleModelSelector> _logger;
-    private readonly Dictionary<string, string> _availableModels;
+    private List<GeminiModel> _cachedModels = [];
 
-    public ConsoleModelSelector(IGeminiApiClient geminiClient, ILogger<ConsoleModelSelector> logger)
+    public ConsoleModelSelector(IModelService modelService, ILogger<ConsoleModelSelector> logger)
     {
-        _geminiClient = geminiClient;
+        _modelService = modelService;
         _logger = logger;
-
-        // Define available models with descriptions
-        _availableModels = new Dictionary<string, string>
-        {
-            { "gemini-2.5-flash", "Latest Gemini 2.5 Flash - Fast and efficient" },
-            { "gemini-2.0-flash-exp", "Experimental Gemini 2.0 Flash - Cutting edge features" },
-            { "gemini-2.0-flash", "Gemini 2.0 Flash - Balanced performance" },
-            { "gemini-1.5-pro", "Gemini 1.5 Pro - High capability model" },
-            { "gemini-1.5-flash", "Gemini 1.5 Flash - Fast and reliable" }
-        };
     }
 
     public async Task<string> SelectModelInteractivelyAsync()
@@ -1457,75 +1462,120 @@ public class ConsoleModelSelector
         // Show loading animation while fetching model availability
         Task loadingTask = ShowModelLoadingAnimationAsync();
 
-        // Validate model availability in parallel (simulate API call)
-        Dictionary<string, string> availableModels = await ValidateModelAvailabilityAsync();
-
-        // Stop loading animation
-        _isLoadingModels = false;
-        await loadingTask;
-
-        // Clear loading line
-        Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+        try
+        {
+            // Fetch real models from the API
+            await RefreshModelCacheAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to refresh model list");
+        }
+        finally
+        {
+            _isLoadingModels = false;
+            await loadingTask;
+            // Clear loading line
+            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+        }
 
         Console.WriteLine("🤖 Available Gemini Models:");
         Console.WriteLine("═══════════════════════════");
 
-        var modelList = availableModels.ToList();
-
         // Animate model list display
-        for (int i = 0; i < modelList.Count; i++)
+        for (int i = 0; i < _cachedModels.Count; i++)
         {
-            KeyValuePair<string, string> model = modelList[i];
+            var model = _cachedModels[i];
+            var modelName = model.GetModelIdentifier();
+            var description = model.Description ?? model.DisplayName ?? "Google Gemini Model";
+
+            // Truncate long descriptions for console display
+            if (description.Length > 60) description = description[..57] + "...";
+
             Console.ForegroundColor = ConsoleColor.Cyan;
             Console.Write($"  [{i + 1}] ");
             Console.ResetColor();
             Console.ForegroundColor = ConsoleColor.White;
-            Console.Write(model.Key);
+            Console.Write(modelName);
             Console.ResetColor();
             Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine($" - {model.Value}");
+            Console.WriteLine($" - {description}");
             Console.ResetColor();
 
             // Small delay for smooth animation
-            await Task.Delay(50);
+            await Task.Delay(30);
         }
 
         while (true)
         {
             Console.WriteLine();
             Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.Write($"Select a model (1-{modelList.Count}) or press Enter for default [{modelList[0].Key}]: ");
+            string defaultName = _cachedModels.FirstOrDefault()?.GetModelIdentifier() ?? "gemini-2.5-flash";
+            Console.Write($"Select a model (1-{_cachedModels.Count}) or press Enter for default [{defaultName}]: ");
             Console.ResetColor();
 
-            // Use async console reading with timeout and cancellation support
+            // Use async console reading with timeout
             string? input = await ReadLineWithTimeoutAsync(TimeSpan.FromMinutes(5));
 
-            // Default selection (first model)
+            // Default selection
             if (string.IsNullOrWhiteSpace(input))
             {
-                string defaultModel = modelList[0].Key;
-                await ShowSelectionConfirmationAsync(defaultModel, isDefault: true);
-                _logger.LogInformation("Model selected: {Model} (default)", defaultModel);
-                return defaultModel;
+                await ShowSelectionConfirmationAsync(defaultName, isDefault: true);
+                _logger.LogInformation("Model selected: {Model} (default)", defaultName);
+                return defaultName;
             }
 
             // Parse user input
             if (int.TryParse(input.Trim(), out int selection) &&
-                selection >= 1 && selection <= modelList.Count)
+                selection >= 1 && selection <= _cachedModels.Count)
             {
-                string selectedModel = modelList[selection - 1].Key;
+                string selectedModel = _cachedModels[selection - 1].GetModelIdentifier();
                 await ShowSelectionConfirmationAsync(selectedModel, isDefault: false);
                 _logger.LogInformation("Model selected: {Model}", selectedModel);
                 return selectedModel;
             }
 
-            // Invalid input with animated error message
-            await ShowErrorMessageAsync($"❌ Invalid selection. Please choose a number between 1 and {modelList.Count}.");
+            // Invalid input
+            await ShowErrorMessageAsync($"❌ Invalid selection. Please choose a number between 1 and {_cachedModels.Count}.");
+        }
+    }
+
+    private async Task RefreshModelCacheAsync()
+    {
+        if (_cachedModels.Count > 0) return; // Already cached
+
+        try
+        {
+            // Fetch models capable of content generation
+            var models = await _modelService.GetModelsByCapabilityAsync(ModelCapability.TextGeneration);
+
+            // Filter and sort for better UX
+            _cachedModels = models
+                .Where(m => !string.IsNullOrEmpty(m.Name))
+                // Prioritize newer models
+                .OrderByDescending(m => m.Name!.Contains("flash"))
+                .ThenByDescending(m => m.Name!.Contains("pro"))
+                .ThenByDescending(m => m.Name)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not fetch models from API. Using fallback list.");
+        }
+
+        // Fallback if API fails or returns nothing
+        if (_cachedModels.Count == 0)
+        {
+            _cachedModels =
+            [
+                new GeminiModel { Name = "models/gemini-2.5-flash", DisplayName = "Gemini 2.5 Flash", Description = "Fast and efficient (Fallback)" },
+                new GeminiModel { Name = "models/gemini-2.0-flash", DisplayName = "Gemini 2.0 Flash", Description = "Balanced performance (Fallback)" },
+                new GeminiModel { Name = "models/gemini-1.5-pro", DisplayName = "Gemini 1.5 Pro", Description = "High capability (Fallback)" }
+            ];
         }
     }
 
     private bool _isLoadingModels = false;
-
     private async Task ShowModelLoadingAnimationAsync()
     {
         _isLoadingModels = true;
@@ -1535,28 +1585,11 @@ public class ConsoleModelSelector
         while (_isLoadingModels)
         {
             Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.Write($"\r{frames[frameIndex]} Checking model availability...");
+            Console.Write($"\r{frames[frameIndex]} Fetching available models from API...");
             Console.ResetColor();
             frameIndex = (frameIndex + 1) % frames.Length;
             await Task.Delay(100);
         }
-    }
-
-    private async Task<Dictionary<string, string>> ValidateModelAvailabilityAsync()
-    {
-        // Simulate checking model availability with the API
-        // In a real implementation, you might check which models are actually available
-        await Task.Delay(1500); // Simulate API call delay
-
-        // For now, return the static list, but this could be dynamic
-        var availableModels = new Dictionary<string, string>(_availableModels);
-
-        // You could add real validation here:
-        // - Check quota limits
-        // - Verify model accessibility
-        // - Get real-time model status
-
-        return availableModels;
     }
 
     private static async Task<string?> ReadLineWithTimeoutAsync(TimeSpan timeout)
@@ -1565,11 +1598,10 @@ public class ConsoleModelSelector
         var timeoutTask = Task.Delay(timeout);
 
         Task completedTask = await Task.WhenAny(readTask, timeoutTask);
-
         if (completedTask == timeoutTask)
         {
             Console.WriteLine("\n⏰ Selection timeout - using default model.");
-            return null; // Will trigger default selection
+            return null;
         }
 
         return await readTask;
@@ -1581,7 +1613,7 @@ public class ConsoleModelSelector
         Console.Write("✓ Selected: ");
         Console.ResetColor();
 
-        // Animate the model name appearing character by character
+        // Animate the model name
         foreach (char c in modelName)
         {
             Console.ForegroundColor = ConsoleColor.White;
@@ -1598,7 +1630,6 @@ public class ConsoleModelSelector
         Console.ResetColor();
         Console.WriteLine();
 
-        // Small celebration animation
         await Task.Delay(200);
         Console.ForegroundColor = ConsoleColor.Green;
         Console.WriteLine("🎉 Ready to go!");
@@ -1609,8 +1640,6 @@ public class ConsoleModelSelector
     private static async Task ShowErrorMessageAsync(string message)
     {
         Console.ForegroundColor = ConsoleColor.Red;
-
-        // Flash the error message
         for (int i = 0; i < 3; i++)
         {
             Console.Write("\r" + message);
@@ -1618,35 +1647,289 @@ public class ConsoleModelSelector
             Console.Write("\r" + new string(' ', message.Length));
             await Task.Delay(100);
         }
-
         Console.WriteLine("\r" + message);
         Console.ResetColor();
         await Task.Delay(500);
     }
+}
 
-    public void DisplayCurrentModel(string modelName)
+
+================================================================================
+FILE: GeminiClientConsole/ConversationLogger.cs
+SIZE: 10.48 KB
+MODIFIED: 2025-12-24 14:50:04
+================================================================================
+
+// GeminiClientConsole/ConversationLogger.cs
+using System.Text;
+
+namespace GeminiClientConsole;
+
+/// <summary>
+/// Handles logging of all prompts, responses, and errors to text files.
+/// Thread-safe implementation with proper resource management.
+/// </summary>
+public class ConversationLogger : IDisposable
+{
+    private readonly string _logDirectory;
+    private readonly string _sessionLogPath;
+    private readonly StreamWriter _logWriter;
+    private readonly object _writeLock = new();
+    private bool _disposed;
+
+    public ConversationLogger(string? customDirectory = null)
     {
-        Console.ForegroundColor = ConsoleColor.DarkCyan;
-        Console.WriteLine($"🤖 Current Model: {modelName}");
+        _logDirectory = customDirectory ?? GetDefaultLogDirectory();
 
-        if (_availableModels.TryGetValue(modelName, out string? description))
+        try
         {
-            Console.WriteLine($"   {description}");
+            Directory.CreateDirectory(_logDirectory);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to create log directory: {_logDirectory}", ex);
         }
 
-        Console.ResetColor();
+        string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+        _sessionLogPath = Path.Combine(_logDirectory, $"conversation_{timestamp}.txt");
+
+        try
+        {
+            _logWriter = new StreamWriter(_sessionLogPath, append: true, Encoding.UTF8)
+            {
+                AutoFlush = true
+            };
+            WriteSessionHeader();
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to create log file: {_sessionLogPath}", ex);
+        }
     }
 
-    public List<string> GetAvailableModels()
+    private void WriteSessionHeader()
     {
-        return [.. _availableModels.Keys];
+        var header = new StringBuilder();
+        header.AppendLine("════════════════════════════════════════════════════════════");
+        header.AppendLine("           GEMINI CONVERSATION LOG");
+        header.AppendLine("════════════════════════════════════════════════════════════");
+        header.AppendLine($"Session Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+        header.AppendLine($"Log File: {_sessionLogPath}");
+        header.AppendLine("════════════════════════════════════════════════════════════");
+        header.AppendLine();
+
+        lock (_writeLock)
+        {
+            _logWriter.Write(header.ToString());
+        }
     }
 
-    public string GetModelDescription(string modelName)
+    private static string GetDefaultLogDirectory()
     {
-        return _availableModels.TryGetValue(modelName, out string? description)
-            ? description
-            : "Unknown model";
+        if (OperatingSystem.IsWindows())
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GeminiClient",
+                "logs");
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return Path.Combine(
+                home,
+                "Library",
+                "Application Support",
+                "GeminiClient",
+                "logs");
+        }
+        else // Linux / Unix - XDG Compliance
+        {
+            string? xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+
+            if (string.IsNullOrWhiteSpace(xdgDataHome))
+            {
+                string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                xdgDataHome = Path.Combine(home, ".local", "share");
+            }
+
+            return Path.Combine(xdgDataHome, "gemini-client", "logs");
+        }
+    }
+
+    public void LogPrompt(string prompt, string modelName, bool isStreaming)
+    {
+        if (string.IsNullOrEmpty(prompt) || string.IsNullOrEmpty(modelName))
+        {
+            return;
+        }
+
+        var entry = new StringBuilder();
+        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] PROMPT");
+        entry.AppendLine($"Model: {modelName}");
+        entry.AppendLine($"Mode: {(isStreaming ? "Streaming" : "Standard")}");
+        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine(prompt);
+        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine();
+
+        WriteToLog(entry.ToString());
+    }
+
+    public void LogResponse(string response, TimeSpan elapsedTime, string modelName)
+    {
+        if (string.IsNullOrEmpty(response) || string.IsNullOrEmpty(modelName))
+        {
+            return;
+        }
+
+        var entry = new StringBuilder();
+        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] RESPONSE");
+        entry.AppendLine($"Model: {modelName}");
+        entry.AppendLine($"Elapsed Time: {FormatElapsedTime(elapsedTime)}");
+        entry.AppendLine($"Characters: {response.Length:N0}");
+        entry.AppendLine($"Words: {response.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length:N0}");
+        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine(response);
+        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine();
+
+        WriteToLog(entry.ToString());
+    }
+
+    public void LogError(Exception exception, string modelName, string? prompt = null)
+    {
+        if (exception == null || string.IsNullOrEmpty(modelName))
+        {
+            return;
+        }
+
+        var entry = new StringBuilder();
+        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ERROR");
+        entry.AppendLine($"Model: {modelName}");
+        entry.AppendLine($"Error Type: {exception.GetType().Name}");
+        entry.AppendLine($"Error Message: {exception.Message}");
+
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            entry.AppendLine("Original Prompt:");
+            entry.AppendLine(prompt);
+        }
+
+        if (exception.InnerException != null)
+        {
+            entry.AppendLine($"Inner Exception: {exception.InnerException.Message}");
+        }
+
+        entry.AppendLine("Stack Trace:");
+        entry.AppendLine(exception.StackTrace);
+        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine();
+
+        WriteToLog(entry.ToString());
+    }
+
+    public void LogCommand(string command)
+    {
+        if (string.IsNullOrEmpty(command))
+        {
+            return;
+        }
+
+        var entry = new StringBuilder();
+        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] COMMAND: {command}");
+        entry.AppendLine();
+
+        WriteToLog(entry.ToString());
+    }
+
+    public void LogSessionStats(int totalRequests, TimeSpan avgResponseTime,
+        TimeSpan sessionDuration, Dictionary<string, int> modelUsage)
+    {
+        modelUsage ??= [];
+
+        var entry = new StringBuilder();
+        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SESSION STATISTICS");
+        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine($"Total Requests: {totalRequests}");
+        entry.AppendLine($"Average Response Time: {FormatElapsedTime(avgResponseTime)}");
+        entry.AppendLine($"Session Duration: {FormatElapsedTime(sessionDuration)}");
+        entry.AppendLine();
+        entry.AppendLine("Model Usage:");
+        foreach (var kvp in modelUsage.OrderByDescending(x => x.Value))
+        {
+            entry.AppendLine($"  - {kvp.Key}: {kvp.Value} requests");
+        }
+        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine();
+
+        WriteToLog(entry.ToString());
+    }
+
+    private void WriteToLog(string content)
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(ConversationLogger));
+        }
+
+        lock (_writeLock)
+        {
+            try
+            {
+                _logWriter.Write(content);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Failed to write to log file: {ex.Message}");
+            }
+        }
+    }
+
+    public string GetLogFilePath() => _sessionLogPath;
+
+    public string GetLogDirectory() => _logDirectory;
+
+    private static string FormatElapsedTime(TimeSpan elapsed)
+    {
+        if (elapsed.TotalMilliseconds < 1000)
+            return $"{elapsed.TotalMilliseconds:F0}ms";
+        else if (elapsed.TotalSeconds < 60)
+            return $"{elapsed.TotalSeconds:F2}s";
+        else if (elapsed.TotalMinutes < 60)
+            return $"{elapsed.Minutes}m {elapsed.Seconds:D2}s";
+        else
+            return $"{elapsed.Hours}h {elapsed.Minutes:D2}m {elapsed.Seconds:D2}s";
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            lock (_writeLock)
+            {
+                try
+                {
+                    _logWriter.WriteLine();
+                    _logWriter.WriteLine("════════════════════════════════════════════════════════════");
+                    _logWriter.WriteLine($"Session Ended: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                    _logWriter.WriteLine("════════════════════════════════════════════════════════════");
+                    _logWriter.Flush();
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Error writing session footer: {ex.Message}");
+                }
+                finally
+                {
+                    _logWriter.Dispose();
+                }
+            }
+
+            _disposed = true;
+        }
+
+        GC.SuppressFinalize(this);
     }
 }
 
@@ -1706,11 +1989,12 @@ MODIFIED: 2025-12-24 14:23:09
 
 ================================================================================
 FILE: GeminiClientConsole/Program.cs
-SIZE: 2.26 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 2.42 KB
+MODIFIED: 2025-12-24 14:50:48
 ================================================================================
 
-﻿using GeminiClient;
+﻿// GeminiClientConsole/Program.cs
+using GeminiClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -1742,6 +2026,7 @@ public class Program
                 _ = services.AddGeminiApiClient(geminiConfigSection);
 
                 // Register console-specific services
+                _ = services.AddSingleton<ConversationLogger>();
                 _ = services.AddTransient<ConsoleModelSelector>();
                 _ = services.AddTransient<AppRunner>();
             })
@@ -1749,7 +2034,8 @@ public class Program
 
         try
         {
-            AppRunner runner = host.Services.GetRequiredService<AppRunner>();
+            using var scope = host.Services.CreateScope();
+            AppRunner runner = scope.ServiceProvider.GetRequiredService<AppRunner>();
             await runner.RunAsync();
         }
         catch (OptionsValidationException ex)
@@ -3799,9 +4085,9 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 
 ===============================================================================
-EXPORT COMPLETED: Wed Dec 24 02:36:05 PM CST 2025
-Total Files Found: 32
-Files Exported: 32
+EXPORT COMPLETED: Wed Dec 24 02:53:05 PM CST 2025
+Total Files Found: 33
+Files Exported: 33
 Files Skipped: 0 (binary or large files)
 Output File: /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
 ===============================================================================

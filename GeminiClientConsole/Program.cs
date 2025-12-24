@@ -1,4 +1,5 @@
-﻿using GeminiClient;
+﻿// GeminiClientConsole/Program.cs
+using GeminiClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -30,6 +31,7 @@ public class Program
                 _ = services.AddGeminiApiClient(geminiConfigSection);
 
                 // Register console-specific services
+                _ = services.AddSingleton<ConversationLogger>();
                 _ = services.AddTransient<ConsoleModelSelector>();
                 _ = services.AddTransient<AppRunner>();
             })
@@ -37,7 +39,8 @@ public class Program
 
         try
         {
-            AppRunner runner = host.Services.GetRequiredService<AppRunner>();
+            using var scope = host.Services.CreateScope();
+            AppRunner runner = scope.ServiceProvider.GetRequiredService<AppRunner>();
             await runner.RunAsync();
         }
         catch (OptionsValidationException ex)
