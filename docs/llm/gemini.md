@@ -498,3 +498,403 @@ jobs:
 
 
 
+dump.txt details a gemini client application built with dotnet. can you please update the following shell script to install this on linux? 
+
+here is the repo information 
+kushal@fedora:~/Documents/mail$ cd ~/src/dotnet/; time git clone git@github.com:kusl/GeminiClient.git
+Cloning into 'GeminiClient'...
+remote: Enumerating objects: 173, done.
+remote: Counting objects: 100% (173/173), done.
+remote: Compressing objects: 100% (102/102), done.
+remote: Total 173 (delta 97), reused 133 (delta 57), pack-reused 0 (from 0)
+Receiving objects: 100% (173/173), 141.06 KiB | 3.28 MiB/s, done.
+Resolving deltas: 100% (97/97), done.
+
+real    0m0.615s
+user    0m0.018s
+sys    0m0.025s
+
+
+#!/bin/bash
+set -e # Exit immediately if a command exits with a non-zero status.
+
+# --- Configuration ---
+GITHUB_REPO="kusl/GeminiClient"
+INSTALL_DIR="/opt/gemini-client"
+EXECUTABLE_BASE_NAME="gemini-client"
+CONFIG_FILE="appsettings.json"
+
+# --- Helper Functions ---
+function check_deps() {
+    echo "--> Checking for dependencies (curl, jq)..."
+    if ! command -v curl &> /dev/null || ! command -v jq &> /dev/null; then
+        echo "Error: 'curl' and 'jq' are required to run this script."
+        echo "Please install them using your package manager."
+        echo "  - Debian/Ubuntu: sudo apt-get update && sudo apt-get install curl jq"
+        echo "  - Fedora/RHEL:   sudo dnf install curl jq"
+        echo "  - Arch Linux:    sudo pacman -S curl jq"
+        exit 1
+    fi
+}
+
+function detect_arch() {
+    echo "--> Detecting system architecture..."
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            GH_ARCH="linux-x64"
+            ;;
+        aarch64)
+            GH_ARCH="linux-arm64"
+            ;;
+        armv7l)
+            GH_ARCH="linux-arm"
+            ;;
+        *)
+            echo "Error: Unsupported architecture '$ARCH'."
+            exit 1
+            ;;
+    esac
+    echo "    Architecture found: $GH_ARCH"
+}
+
+# --- Main Script ---
+
+check_deps
+detect_arch
+
+# Construct the expected asset name and executable name from the detected architecture
+ASSET_NAME="${EXECUTABLE_BASE_NAME}-${GH_ARCH}.tar.gz"
+EXECUTABLE_NAME="${EXECUTABLE_BASE_NAME}-${GH_ARCH}"
+
+echo "--> Fetching latest release information from GitHub..."
+API_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+DOWNLOAD_URL=$(curl -s "$API_URL" | jq -r ".assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url")
+
+if [[ -z "$DOWNLOAD_URL" || "$DOWNLOAD_URL" == "null" ]]; then
+    echo "Error: Could not find a download URL for asset '$ASSET_NAME' in the latest release."
+    echo "Please check the releases page: https://github.com/$GITHUB_REPO/releases"
+    exit 1
+fi
+
+echo "    Found download URL for version $(basename $(dirname $DOWNLOAD_URL))."
+
+# Create temporary directories for download and extraction
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf -- "$TMP_DIR"' EXIT # Ensure cleanup on script exit
+
+TMP_ARCHIVE="$TMP_DIR/$ASSET_NAME"
+
+echo "--> Downloading latest release to a temporary location..."
+curl -L -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"
+
+echo "--> Extracting archive..."
+# The archive contains the files directly, so we extract into a sub-folder
+EXTRACT_DIR="$TMP_DIR/extracted"
+mkdir -p "$EXTRACT_DIR"
+tar -xzf "$TMP_ARCHIVE" -C "$EXTRACT_DIR"
+
+# --- Configuration Preservation ---
+DEST_CONFIG_PATH="$INSTALL_DIR/$CONFIG_FILE"
+TEMP_CONFIG_BACKUP="$TMP_DIR/$CONFIG_FILE.bak"
+PRESERVED_CONFIG=false
+
+if [ -f "$DEST_CONFIG_PATH" ]; then
+    echo "--> Found existing configuration. Preserving it."
+    # Use sudo to copy the config file we might not have permission to read otherwise
+    sudo cp "$DEST_CONFIG_PATH" "$TEMP_CONFIG_BACKUP"
+    PRESERVED_CONFIG=true
+fi
+
+echo "--> Installing to $INSTALL_DIR (this may require sudo password)..."
+
+# Use sudo for all subsequent operations that touch the destination directory
+sudo mkdir -p "$INSTALL_DIR"
+sudo rm -rf "${INSTALL_DIR:?}"/* # Clear out the old installation
+sudo cp -r "$EXTRACT_DIR"/* "$INSTALL_DIR/"
+
+# Restore the backed-up configuration if it exists
+if [ "$PRESERVED_CONFIG" = true ]; then
+    echo "--> Restoring previous configuration..."
+    sudo mv "$TEMP_CONFIG_BACKUP" "$DEST_CONFIG_PATH"
+fi
+
+# Set executable permissions
+EXECUTABLE_PATH="$INSTALL_DIR/$EXECUTABLE_NAME"
+echo "--> Setting executable permission for $EXECUTABLE_PATH..."
+sudo chmod +x "$EXECUTABLE_PATH"
+
+echo ""
+echo "✅ Installation/Update complete!"
+echo "--------------------------------------------------"
+echo "  Executable: $EXECUTABLE_PATH"
+echo "  Config:     $DEST_CONFIG_PATH"
+echo ""
+
+if [ "$PRESERVED_CONFIG" = false ]; then
+    echo "NOTE: A new '$CONFIG_FILE' was created."
+    echo "You must edit it to add your API Key:"
+    echo "  sudo nano $DEST_CONFIG_PATH"
+else
+    echo "Your existing '$CONFIG_FILE' has been preserved."
+fi
+
+echo ""
+echo "To run the client from anywhere, you can create a symbolic link:"
+echo "  sudo ln -s -f $EXECUTABLE_PATH /usr/local/bin/$EXECUTABLE_BASE_NAME"
+echo ""
+echo "Now you can run the client by typing: $EXECUTABLE_BASE_NAME"
+echo ""
+
+# The trap will handle cleaning up $TMP_DIR
+
+Based on the `continuous-release.yml` and the `README.md`  found in the file dump, I have updated the installation script.
+
+### Key Changes & Improvements:
+
+1. 
+**Repo URL:** Updated to `kusl/GeminiClient` matching the provided git output and `Directory.Build.props`.
+
+
+2. 
+**Binary Name Handling:** The CI workflow renames the binary to `gemini-client-linux-x64` before archiving. The script now accounts for this specific filename rather than a generic name.
+
+
+3. 
+**Config Generation:** The release workflow explicitly *only* tars the executable (`tar -czf ... gemini-client-linux-x64`). This means the `appsettings.json` is **not** included in the download. I added logic to generate a default configuration file if one is not present so the app doesn't crash on the first run.
+
+
+4. 
+**Architecture:** While the project code supports ARM64, the current release workflow  only builds for `linux-x64` and `win-x64`. I added a specific check to warn ARM users (like Raspberry Pi) that a release might not exist for them yet.
+
+
+
+Here is the updated `install.sh`:
+
+```bash
+#!/bin/bash
+set -e # Exit immediately if a command exits with a non-zero status.
+
+# --- Configuration ---
+GITHUB_REPO="kusl/GeminiClient"
+INSTALL_DIR="/opt/gemini-client"
+# The specific binary name generated by the CI workflow (e.g., gemini-client-linux-x64)
+BINARY_BASE_NAME="gemini-client" 
+SYMLINK_NAME="gemini-client"
+CONFIG_FILE="appsettings.json"
+
+# --- Helper Functions ---
+function check_deps() {
+    echo "--> Checking for dependencies..."
+    local deps=("curl" "jq" "tar")
+    local missing=()
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing+=("$dep")
+        fi
+    done
+
+    if [ ${#missing[@]} -gt 0 ]; then
+        echo "Error: The following dependencies are required: ${missing[*]}"
+        echo "Please install them using your package manager."
+        echo "  - Fedora/RHEL:   sudo dnf install ${missing[*]}"
+        echo "  - Debian/Ubuntu: sudo apt-get update && sudo apt-get install ${missing[*]}"
+        exit 1
+    fi
+}
+
+function detect_arch() {
+    echo "--> Detecting system architecture..."
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            GH_ARCH="linux-x64"
+            ;;
+        aarch64)
+            GH_ARCH="linux-arm64"
+            echo "⚠️  Note: While the project supports ARM64, the current CI pipeline might only publish x64 releases."
+            ;;
+        armv7l)
+            GH_ARCH="linux-arm"
+            ;;
+        *)
+            echo "Error: Unsupported architecture '$ARCH'."
+            exit 1
+            ;;
+    esac
+    echo "    Architecture found: $GH_ARCH"
+}
+
+# --- Main Script ---
+
+check_deps
+detect_arch
+
+# The asset name in GitHub releases (e.g., gemini-client-linux-x64.tar.gz)
+ASSET_NAME="${BINARY_BASE_NAME}-${GH_ARCH}.tar.gz"
+# The actual executable name inside the tar (e.g., gemini-client-linux-x64)
+EXECUTABLE_NAME="${BINARY_BASE_NAME}-${GH_ARCH}"
+
+echo "--> Fetching latest release information from GitHub..."
+API_URL="https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+RELEASE_JSON=$(curl -s "$API_URL")
+DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r ".assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url")
+
+if [[ -z "$DOWNLOAD_URL" || "$DOWNLOAD_URL" == "null" ]]; then
+    echo "Error: Could not find a download URL for asset '$ASSET_NAME' in the latest release."
+    echo "This may mean there is no release for your architecture ($GH_ARCH) yet."
+    echo "Please check the releases page: https://github.com/$GITHUB_REPO/releases"
+    exit 1
+fi
+
+VERSION=$(echo "$RELEASE_JSON" | jq -r .tag_name)
+echo "    Found version $VERSION at: $DOWNLOAD_URL"
+
+# Create temporary directories
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf -- "$TMP_DIR"' EXIT
+
+TMP_ARCHIVE="$TMP_DIR/$ASSET_NAME"
+
+echo "--> Downloading..."
+curl -L -o "$TMP_ARCHIVE" "$DOWNLOAD_URL"
+
+echo "--> Extracting..."
+EXTRACT_DIR="$TMP_DIR/extracted"
+mkdir -p "$EXTRACT_DIR"
+tar -xzf "$TMP_ARCHIVE" -C "$EXTRACT_DIR"
+
+# --- Configuration Management ---
+DEST_CONFIG_PATH="$INSTALL_DIR/$CONFIG_FILE"
+TEMP_CONFIG_BACKUP="$TMP_DIR/$CONFIG_FILE.bak"
+CONFIG_STRATEGY="none"
+
+# 1. Check if user already has a config
+if [ -f "$DEST_CONFIG_PATH" ]; then
+    echo "--> Found existing configuration. Preserving it."
+    sudo cp "$DEST_CONFIG_PATH" "$TEMP_CONFIG_BACKUP"
+    CONFIG_STRATEGY="restore"
+else
+    # 2. Check if the download included a config (Note: current CI excludes it)
+    if [ -f "$EXTRACT_DIR/$CONFIG_FILE" ]; then
+        echo "--> Using configuration provided in release."
+        CONFIG_STRATEGY="copy_new"
+    else
+        # 3. Generate default config if missing
+        echo "--> No configuration found in release. Generating default $CONFIG_FILE."
+        cat <<EOF > "$EXTRACT_DIR/$CONFIG_FILE"
+{
+    "Logging": {
+        "LogLevel": {
+            "Default": "Warning",
+            "GeminiClient": "Warning",
+            "GeminiClientConsole": "Information"
+        }
+    },
+    "GeminiSettings": {
+        "ApiKey": "YOUR_GEMINI_API_KEY_HERE",
+        "BaseUrl": "https://generativelanguage.googleapis.com/",
+        "DefaultModel": "gemini-2.5-flash",
+        "StreamingEnabled": true
+    }
+}
+EOF
+        CONFIG_STRATEGY="copy_generated"
+    fi
+fi
+
+echo "--> Installing to $INSTALL_DIR (requires sudo)..."
+
+# Prepare directory
+sudo mkdir -p "$INSTALL_DIR"
+
+# Copy executable
+sudo cp "$EXTRACT_DIR/$EXECUTABLE_NAME" "$INSTALL_DIR/"
+
+# Handle Config Placement
+if [ "$CONFIG_STRATEGY" == "restore" ]; then
+    sudo mv "$TEMP_CONFIG_BACKUP" "$DEST_CONFIG_PATH"
+elif [ "$CONFIG_STRATEGY" == "copy_generated" ] || [ "$CONFIG_STRATEGY" == "copy_new" ]; then
+    sudo cp "$EXTRACT_DIR/$CONFIG_FILE" "$DEST_CONFIG_PATH"
+fi
+
+# Set permissions
+INSTALLED_EXEC="$INSTALL_DIR/$EXECUTABLE_NAME"
+echo "--> Setting executable permissions..."
+sudo chmod +x "$INSTALLED_EXEC"
+# Ensure config is readable by users
+sudo chmod 644 "$DEST_CONFIG_PATH"
+
+# Symlink
+echo "--> Updating symbolic link..."
+sudo ln -sf "$INSTALLED_EXEC" "/usr/local/bin/$SYMLINK_NAME"
+
+echo ""
+echo "✅ Installation complete!"
+echo "--------------------------------------------------"
+echo "  Executable: $INSTALLED_EXEC"
+echo "  Symlink:    /usr/local/bin/$SYMLINK_NAME"
+echo "  Config:     $DEST_CONFIG_PATH"
+echo "--------------------------------------------------"
+
+if [ "$CONFIG_STRATEGY" == "copy_generated" ]; then
+    echo "⚠️  IMPORTANT: A default configuration file was created."
+    echo "   You MUST update it with your API Key before running:"
+    echo "   sudo nano $DEST_CONFIG_PATH"
+    echo ""
+    echo "   Get your key here: https://aistudio.google.com/apikey"
+elif [ "$CONFIG_STRATEGY" == "restore" ]; then
+    echo "   Your previous configuration was preserved."
+fi
+
+echo ""
+echo "Run the client by typing: $SYMLINK_NAME"
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
