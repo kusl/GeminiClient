@@ -308,3 +308,193 @@ Run dotnet publish GeminiClientConsole/GeminiClientConsole.csproj \
     Error: Process completed with exit code 1.
 
 
+The build failed because of how the version properties are defined in your `Directory.Build.props` file versus how the CI overrides them.
+
+### The Problem
+
+In your `Directory.Build.props`, you have this logic:
+
+```xml
+<Version>0.0.7</Version>
+<FileVersion>$(Version).0</FileVersion>
+<AssemblyVersion>$(Version).0</AssemblyVersion>
+
+```
+
+When the GitHub Action sets the `Version` to `0.0.7.2` (adding the run number), MSBuild automatically evaluates `FileVersion` as `$(Version).0`, resulting in **`0.0.7.2.0`**.
+Windows version numbers strictly allow only 4 parts (`Major.Minor.Build.Revision`), so `0.0.7.2.0` (5 parts) triggers error `CS7034`.
+
+### The Fix
+
+You need to explicitly override `FileVersion` and `AssemblyVersion` in your GitHub Action command so MSBuild doesn't try to append that extra `.0`.
+
+Update your `.github/workflows/continuous-release.yml` file to include these three extra flags in the `dotnet publish` commands:
+`-p:FileVersion=${{ steps.versioning.outputs.version }} -p:AssemblyVersion=${{ steps.versioning.outputs.version }}`
+
+Here is the corrected, complete workflow file:
+
+```yaml
+name: Continuous Release
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_VERSION: '9.0.x'
+  PROJECT_PATH: 'GeminiClientConsole/GeminiClientConsole.csproj'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Generate Version
+      id: versioning
+      run: |
+        # Extract 0.0.7 from <Version>0.0.7</Version>
+        BASE_VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+        # Create 0.0.7.45 (where 45 is the run number)
+        NEW_VERSION="${BASE_VERSION}.${{ github.run_number }}"
+        echo "Calculated Version: $NEW_VERSION"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    # Build for Linux
+    - name: Build Linux x64
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime linux-x64 \
+          --self-contained true \
+          --output ./publish/linux-x64 \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:Version=${{ steps.versioning.outputs.version }} \
+          -p:FileVersion=${{ steps.versioning.outputs.version }} \
+          -p:AssemblyVersion=${{ steps.versioning.outputs.version }}
+
+        # Package
+        cd ./publish/linux-x64
+        chmod +x GeminiClientConsole
+        mv GeminiClientConsole gemini-client-linux-x64
+        tar -czf ../../gemini-client-linux-x64.tar.gz gemini-client-linux-x64
+        cd ../..
+
+    # Build for Windows
+    - name: Build Windows x64
+      run: |
+        dotnet publish ${{ env.PROJECT_PATH }} \
+          --configuration Release \
+          --runtime win-x64 \
+          --self-contained true \
+          --output ./publish/win-x64 \
+          -p:PublishSingleFile=true \
+          -p:PublishTrimmed=true \
+          -p:Version=${{ steps.versioning.outputs.version }} \
+          -p:FileVersion=${{ steps.versioning.outputs.version }} \
+          -p:AssemblyVersion=${{ steps.versioning.outputs.version }}
+
+        # Package
+        cd ./publish/win-x64
+        mv GeminiClientConsole.exe gemini-client-win-x64.exe
+        zip -r ../../gemini-client-win-x64.zip gemini-client-win-x64.exe
+        cd ../..
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.versioning.outputs.version }}
+        name: Release v${{ steps.versioning.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        files: |
+          gemini-client-linux-x64.tar.gz
+          gemini-client-win-x64.zip
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
