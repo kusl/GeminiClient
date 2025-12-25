@@ -1,13 +1,10 @@
 # 🤖 Gemini Client Console
 
-A powerful, interactive command-line client for Google's Gemini AI API with **real-time streaming**, model selection, performance metrics, and session statistics.
+A powerful, interactive command-line client for Google's Gemini AI API featuring **multi-turn conversations**, **real-time streaming**, dynamic model selection, XDG-compliant conversation logging, and detailed performance metrics.
 
 ## 🔑 Quick Start - API Key Required!
 
-> 
-> **⚠️ IMPORTANT: You need a Google Gemini API key to use this application!** 
-> 
-> 
+> **⚠️ IMPORTANT: You need a Google Gemini API key to use this application!**
 
 ### Getting Your API Key
 
@@ -17,81 +14,84 @@ A powerful, interactive command-line client for Google's Gemini AI API with **re
 
 ### Setting Your API Key
 
-The application supports multiple configuration methods in the following priority:
+The application supports multiple configuration methods (in priority order):
 
-1. **User Secrets** (Recommended for development): `dotnet user-secrets set "GeminiSettings:ApiKey" "YOUR_API_KEY"` 
+1. **User Secrets** (Recommended for development):
+   ```bash
+   dotnet user-secrets set "GeminiSettings:ApiKey" "YOUR_API_KEY"
+   ```
 
+2. **Environment Variables**:
+   ```bash
+   export GeminiSettings__ApiKey="YOUR_API_KEY"
+   ```
 
-2. **Environment Variables**: `export GeminiSettings__ApiKey="YOUR_API_KEY"` 
-
-
-3. **appsettings.json**: Create this file in the executable directory:
-
-
-
-```json
-{
-  "GeminiSettings": {
-    "ApiKey": "YOUR_API_KEY_HERE",
-    "StreamingEnabled": true
-  }
-}
-
-```
+3. **appsettings.json** in the executable directory:
+   ```json
+   {
+     "GeminiSettings": {
+       "ApiKey": "YOUR_API_KEY_HERE",
+       "BaseUrl": "https://generativelanguage.googleapis.com/",
+       "DefaultModel": "gemini-2.5-flash"
+     }
+   }
+   ```
 
 ## 📥 Installation
 
 ### Download Pre-built Binaries
 
-Download the latest release (v0.0.7) for your platform from the [Releases page](https://www.google.com/search?q=https://github.com/kusl/GeminiClient/releases).
+Download the latest release for your platform from the [Releases page](https://github.com/kusl/GeminiClient/releases).
 
-| Platform | Download | Architecture |
-| --- | --- | --- |
-| **Windows** | `gemini-client-win-x64.zip` | 64-bit Intel/AMD |
-| **Linux** | `gemini-client-linux-x64.tar.gz` | 64-bit Intel/AMD |
-| **macOS** | `gemini-client-osx-arm64.tar.gz` | Apple Silicon (M1/M2/M3) |
+| Platform    | Download                            | Architecture              |
+|-------------|-------------------------------------|---------------------------|
+| **Windows** | `gemini-client-win-x64.zip`         | 64-bit Intel/AMD          |
+| **Linux**   | `gemini-client-linux-x64.tar.gz`    | 64-bit Intel/AMD          |
 
-> **Note**: Self-contained binaries include the .NET 10 runtime. No separate installation is required.
-> 
-> 
+> **Note**: Self-contained binaries include the .NET 10 runtime. No separate installation required.
+
+### Linux One-Liner Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kusl/GeminiClient/main/install-gemini-client.sh | bash
+```
 
 ## 🚀 Features
 
-### 🌊 Real-time Streaming (v0.0.7 Optimized)
+### 💬 Multi-Turn Conversations
+Engage in stateful, context-aware conversations. The client remembers your previous exchanges within a session, allowing for natural follow-up questions and iterative discussions. Use the `reset` command to start fresh.
 
-* **SSE Support**: True real-time communication with the Gemini API using Server-Sent Events.
+### 🌊 Real-time Streaming
+- **SSE Support**: True real-time communication with the Gemini API using Server-Sent Events.
+- **Performance Optimizations**: Configured with Server GC and Concurrent GC for high-throughput response handling.
+- **Live Metrics**: Monitor token speed (tokens/s) and first-response latency in real-time.
 
+### 🤖 Dynamic Model Selection
+- **Live Discovery**: Fetches available models directly from the Gemini API at startup.
+- **Smart Fallbacks**: Gracefully handles API errors with a curated fallback list.
 
-* **Performance Optimizations**: Configured with Server GC and Concurrent GC for high-throughput real-time response handling.
-
-
-* **Live Metrics**: Monitor token speed (tokens/s) and first-response latency in real-time.
-
-
-
-### Interactive Model Selection
-
-* **Dynamic Discovery**: Automatically fetches available models (Flash, Pro, Ultra, Experimental).
-
-
-* **Terminal Friendly**: Preserves terminal history and avoids screen clearing for better compatibility.
-
-
+### 📝 Conversation Logging
+All prompts, responses, and session statistics are automatically logged to text files for review and debugging.
+- **Linux**: `~/.local/share/gemini-client/logs/` (XDG compliant)
+- **macOS**: `~/Library/Application Support/GeminiClient/logs/`
+- **Windows**: `%LOCALAPPDATA%\GeminiClient\logs\`
 
 ## 💻 Usage
 
 ### Available Commands
 
-| Command | Description |
-| --- | --- |
-| `exit` | Quit the application |
-| `model` | Change the selected AI model |
-| `stats` | View detailed session statistics |
-| `stream` | Toggle streaming mode ON/OFF |
+| Command  | Description                                      |
+|----------|--------------------------------------------------|
+| `exit`   | Quit the application and display session stats   |
+| `reset`  | Clear conversation context and start fresh       |
+| `model`  | Change the selected AI model                     |
+| `stats`  | View detailed session statistics                 |
+| `log`    | Open the log folder in your file manager         |
+| `stream` | Toggle streaming mode ON/OFF                     |
 
 ### Building from Source
 
-**Prerequisites**: [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
+**Prerequisites**: [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
 ```bash
 # Clone the repository
@@ -103,20 +103,14 @@ dotnet build
 
 # Run the console app
 dotnet run --project GeminiClientConsole
-
 ```
 
 ## 🛠️ Project Structure
 
-* **GeminiClient**: Core library with SSE streaming support and API logic.
-
-
-* **GeminiClientConsole**: Interactive CLI with animated model selection.
-
-
-* **Directory.Build.props**: Centralized versioning (v0.0.7) and build optimizations.
-
-
+- **GeminiClient/**: Core library with multi-turn API support and SSE streaming.
+- **GeminiClientConsole/**: Interactive CLI with conversation state management, animated model selection, and XDG-compliant logging.
+- **Directory.Build.props**: Centralized versioning and build optimizations.
+- **Directory.Packages.props**: Central Package Management for all NuGet dependencies.
 
 ## 📜 License
 
@@ -136,19 +130,21 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 ## 🔄 Version History
 
-* **v0.0.7** (Current) - Upgraded to .NET 10.0, implemented repository-wide performance optimizations for streaming, and centralized versioning.
-
-
-* **v0.0.6** - Added real-time streaming support with SSE.
-
-
-* **v0.0.5** - Improved terminal compatibility by removing destructive console clears.
-
-
-* **v0.0.4** - Initial interactive console client with dynamic model discovery.
-
-
+- **v0.0.8** (Current) - Added multi-turn conversation support, `reset` command, `log` command, and XDG-compliant conversation logging.
+- **v0.0.7** - Upgraded to .NET 10.0, implemented repository-wide performance optimizations for streaming, and centralized versioning.
+- **v0.0.6** - Added real-time streaming support with SSE.
+- **v0.0.5** - Improved terminal compatibility by removing destructive console clears.
+- **v0.0.4** - Initial interactive console client with dynamic model discovery.
 
 ---
 
 *Notice: This project contains code generated by Large Language Models such as Claude and Gemini. All code is experimental whether explicitly stated or not. The streaming implementation uses Server-Sent Events (SSE) for real-time communication with the Gemini API.*
+
+
+
+
+
+
+
+
+
