@@ -4,8 +4,8 @@ set -e
 echo "🚀 Starting Hyper-Contextual Environmental Grounding Upgrade..."
 
 # Ensure we are in the project root
-if [ ! -f "GeminiClient.sln" ]; then
-    echo "❌ Error: Please run this script from the root of the repository (where GeminiClient.sln is located)."
+if [ ! -f "LearningByDoing.sln" ]; then
+    echo "❌ Error: Please run this script from the root of the repository (where LearningByDoing.sln is located)."
     exit 1
 fi
 
