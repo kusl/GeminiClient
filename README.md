@@ -34,7 +34,7 @@ export GeminiSettings__ApiKey="YOUR_API_KEY"
 {
   "GeminiSettings": {
     "ApiKey": "YOUR_API_KEY_HERE",
-    "BaseUrl": "[https://generativelanguage.googleapis.com/](https://generativelanguage.googleapis.com/)",
+    "BaseUrl": "https://generativelanguage.googleapis.com/",
     "DefaultModel": "gemini-2.5-flash"
   }
 }
@@ -48,7 +48,7 @@ export GeminiSettings__ApiKey="YOUR_API_KEY"
 ### Linux One-Liner Install
 
 ```bash
-curl -fsSL [https://raw.githubusercontent.com/kusl/GeminiClient/main/install-gemini-client.sh](https://raw.githubusercontent.com/kusl/GeminiClient/main/install-gemini-client.sh) | bash
+curl -fsSL https://raw.githubusercontent.com/kusl/GeminiClient/main/install-gemini-client.sh | bash
 
 ```
 
@@ -113,7 +113,7 @@ All prompts, responses, and session statistics are automatically logged to text 
 
 ```bash
 # Clone the repository
-git clone [https://github.com/kusl/GeminiClient.git](https://github.com/kusl/GeminiClient.git)
+git clone https://github.com/kusl/GeminiClient.git
 cd GeminiClient
 
 # Build the project
