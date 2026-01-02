@@ -17,8 +17,8 @@ public class GeminiApiClient : IGeminiApiClient
     private readonly IEnvironmentContextService _contextService;
 
     public GeminiApiClient(
-        HttpClient httpClient, 
-        IOptions<GeminiApiOptions> options, 
+        HttpClient httpClient,
+        IOptions<GeminiApiOptions> options,
         ILogger<GeminiApiClient> logger,
         IEnvironmentContextService contextService)
     {
@@ -78,7 +78,7 @@ public class GeminiApiClient : IGeminiApiClient
             using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
 
             using HttpResponseMessage response = await _httpClient.PostAsync(requestUri, jsonContent, cancellationToken);
-            
+
             if (!response.IsSuccessStatusCode)
             {
                 string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -144,7 +144,7 @@ public class GeminiApiClient : IGeminiApiClient
         {
             Content = jsonContent
         };
-        
+
         request.Headers.Accept.Clear();
         request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };

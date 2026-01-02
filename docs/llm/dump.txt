@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Fri Jan  2 07:08:01 AM CST 2026
+Generated: Fri Jan  2 07:10:32 AM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -23,11 +23,13 @@ DIRECTORY STRUCTURE:
 │   │   ├── GeminiRequest.cs
 │   │   ├── GeminiResponse.cs
 │   │   └── ModelSelectionCriteria.cs
+│   ├── EnvironmentContextService.cs
 │   ├── GeminiApiClient.cs
 │   ├── GeminiApiException.cs
 │   ├── GeminiApiOptions.cs
 │   ├── GeminiApiOptionsValidator.cs
 │   ├── GeminiClient.csproj
+│   ├── IEnvironmentContextService.cs
 │   ├── IGeminiApiClient.cs
 │   ├── IModelService.cs
 │   ├── JsonSerializerContext.cs
@@ -2068,12 +2070,93 @@ public class Program
 
 
 ================================================================================
-FILE: GeminiClient/GeminiApiClient.cs
-SIZE: 7.99 KB
-MODIFIED: 2025-12-24 15:11:44
+FILE: GeminiClient/EnvironmentContextService.cs
+SIZE: 2.79 KB
+MODIFIED: 2026-01-02 07:10:32
 ================================================================================
 
-﻿// GeminiClient/GeminiApiClient.cs
+// GeminiClient/EnvironmentContextService.cs
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text;
+using GeminiClient.Models;
+using Microsoft.Extensions.Logging;
+
+namespace GeminiClient;
+
+public class EnvironmentContextService : IEnvironmentContextService
+{
+    private readonly ILogger<EnvironmentContextService> _logger;
+
+    public EnvironmentContextService(ILogger<EnvironmentContextService> logger)
+    {
+        _logger = logger;
+    }
+
+    public Content GetSystemInstruction()
+    {
+        var sb = new StringBuilder();
+        var now = DateTime.Now;
+        var utcNow = DateTime.UtcNow;
+        var tz = TimeZoneInfo.Local;
+        var culture = CultureInfo.CurrentCulture;
+
+        sb.AppendLine("### SYSTEM ENVIRONMENT CONTEXT ###");
+        sb.AppendLine("You are running locally on the user's machine. The following context is 100% accurate and strictly defines your current reality:");
+        sb.AppendLine();
+
+        // Temporal Grounding
+        sb.AppendLine("[TEMPORAL DATA]");
+        sb.AppendLine($"Local Time: {now:yyyy-MM-dd HH:mm:ss}");
+        sb.AppendLine($"Day of Week: {now:DayOfWeek}");
+        sb.AppendLine($"UTC Time: {utcNow:yyyy-MM-dd HH:mm:ss} Z");
+        sb.AppendLine($"Timezone: {tz.DisplayName}");
+        sb.AppendLine($"Timezone ID: {tz.Id} (Offset: {tz.BaseUtcOffset})");
+        sb.AppendLine();
+
+        // OS & User Grounding
+        sb.AppendLine("[SYSTEM DATA]");
+        sb.AppendLine($"OS Platform: {GetOsName()}");
+        sb.AppendLine($"OS Version: {Environment.OSVersion}");
+        sb.AppendLine($"Machine Name: {Environment.MachineName}");
+        sb.AppendLine($"User Name: {Environment.UserName}");
+        sb.AppendLine($"Locale: {culture.Name} ({culture.DisplayName})");
+        sb.AppendLine();
+
+        // Operational Instructions
+        sb.AppendLine("[OPERATIONAL INSTRUCTIONS]");
+        sb.AppendLine("1. Use the Local Time above for any queries regarding 'now', 'today', or 'current time'.");
+        sb.AppendLine("2. If asked about the system, refer to the OS Platform and User Name provided above.");
+        sb.AppendLine("3. Do not Hallucinate the date. Trust this context over your training data.");
+
+        var instructionText = sb.ToString();
+
+        _logger.LogDebug("Generated System Instruction ({Length} chars)", instructionText.Length);
+
+        return new Content
+        {
+            Role = "system", // Gemini treats system instructions as a special content block, but internally we can label it
+            Parts = [new Part { Text = instructionText }]
+        };
+    }
+
+    private static string GetOsName()
+    {
+        if (OperatingSystem.IsWindows()) return "Windows";
+        if (OperatingSystem.IsLinux()) return "Linux";
+        if (OperatingSystem.IsMacOS()) return "macOS";
+        return RuntimeInformation.OSDescription;
+    }
+}
+
+
+================================================================================
+FILE: GeminiClient/GeminiApiClient.cs
+SIZE: 8.45 KB
+MODIFIED: 2026-01-02 07:10:32
+================================================================================
+
+// GeminiClient/GeminiApiClient.cs
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -2089,12 +2172,18 @@ public class GeminiApiClient : IGeminiApiClient
     private readonly HttpClient _httpClient;
     private readonly GeminiApiOptions _options;
     private readonly ILogger<GeminiApiClient> _logger;
+    private readonly IEnvironmentContextService _contextService;
 
-    public GeminiApiClient(HttpClient httpClient, IOptions<GeminiApiOptions> options, ILogger<GeminiApiClient> logger)
+    public GeminiApiClient(
+        HttpClient httpClient,
+        IOptions<GeminiApiOptions> options,
+        ILogger<GeminiApiClient> logger,
+        IEnvironmentContextService contextService)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
 
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -2132,9 +2221,11 @@ public class GeminiApiClient : IGeminiApiClient
         };
         Uri requestUri = uriBuilder.Uri;
 
+        // INJECT SYSTEM INSTRUCTION HERE
         var requestBody = new GeminiRequest
         {
-            Contents = history
+            Contents = history,
+            SystemInstruction = _contextService.GetSystemInstruction()
         };
 
         _logger.LogInformation("Sending request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
@@ -2196,9 +2287,11 @@ public class GeminiApiClient : IGeminiApiClient
         };
         Uri requestUri = uriBuilder.Uri;
 
+        // INJECT SYSTEM INSTRUCTION HERE
         var requestBody = new GeminiRequest
         {
-            Contents = history
+            Contents = history,
+            SystemInstruction = _contextService.GetSystemInstruction()
         };
 
         _logger.LogInformation("Sending streaming request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
@@ -2431,6 +2524,27 @@ MODIFIED: 2025-12-24 14:22:06
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 </Project>
+
+
+================================================================================
+FILE: GeminiClient/IEnvironmentContextService.cs
+SIZE: .35 KB
+MODIFIED: 2026-01-02 07:09:47
+================================================================================
+
+// GeminiClient/IEnvironmentContextService.cs
+using GeminiClient.Models;
+
+namespace GeminiClient;
+
+public interface IEnvironmentContextService
+{
+    /// <summary>
+    /// Generates a system instruction containing real-time environmental context
+    /// (Time, Date, OS, User, Locale) to ground the LLM.
+    /// </summary>
+    Content GetSystemInstruction();
+}
 
 
 ================================================================================
@@ -2792,17 +2906,20 @@ public class ModelsListResponse
 
 ================================================================================
 FILE: GeminiClient/Models/GeminiRequest.cs
-SIZE: .50 KB
-MODIFIED: 2025-12-24 15:10:29
+SIZE: .59 KB
+MODIFIED: 2026-01-02 07:09:47
 ================================================================================
 
-﻿// GeminiClient/Models/GeminiRequest.cs
+// GeminiClient/Models/GeminiRequest.cs
 using System.Text.Json.Serialization;
 
 namespace GeminiClient.Models;
 
 public class GeminiRequest
 {
+    [JsonPropertyName("system_instruction")]
+    public Content? SystemInstruction { get; set; }
+
     [JsonPropertyName("contents")]
     public List<Content> Contents { get; set; } = [];
 }
@@ -2924,11 +3041,11 @@ public enum ModelCapability
 
 ================================================================================
 FILE: GeminiClient/ServiceCollectionExtensions.cs
-SIZE: 3.03 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 3.09 KB
+MODIFIED: 2026-01-02 07:09:47
 ================================================================================
 
-﻿// GeminiClient/ServiceCollectionExtensions.cs (Updated to avoid trimming warnings)
+// GeminiClient/ServiceCollectionExtensions.cs
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
@@ -2973,8 +3090,11 @@ public static class ServiceCollectionExtensions
         // Add validation
         services.AddSingleton<IValidateOptions<GeminiApiOptions>, GeminiApiOptionsValidator>();
 
-        // Add memory cache for model caching (if not already added)
+        // Add memory cache for model caching
         services.TryAddSingleton<IMemoryCache, MemoryCache>();
+
+        // REGISTER NEW GROUNDING SERVICE
+        services.TryAddSingleton<IEnvironmentContextService, EnvironmentContextService>();
 
         // Register ModelService with HttpClient
         _ = services.AddHttpClient<IModelService, ModelService>((serviceProvider, client) =>
@@ -2997,7 +3117,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 }
-
 
 
 ================================================================================
@@ -4095,7 +4214,7 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 ================================================================================
 FILE: upgrade-grounding.sh
 SIZE: 16.59 KB
-MODIFIED: 2026-01-02 07:07:52
+MODIFIED: 2026-01-02 07:09:16
 ================================================================================
 
 #!/bin/bash
@@ -4104,8 +4223,8 @@ set -e
 echo "🚀 Starting Hyper-Contextual Environmental Grounding Upgrade..."
 
 # Ensure we are in the project root
-if [ ! -f "GeminiClient.sln" ]; then
-    echo "❌ Error: Please run this script from the root of the repository (where GeminiClient.sln is located)."
+if [ ! -f "LearningByDoing.sln" ]; then
+    echo "❌ Error: Please run this script from the root of the repository (where LearningByDoing.sln is located)."
     exit 1
 fi
 
@@ -4542,9 +4661,9 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Fri Jan  2 07:08:01 AM CST 2026
-Total Files Found: 34
-Files Exported: 34
+EXPORT COMPLETED: Fri Jan  2 07:10:33 AM CST 2026
+Total Files Found: 36
+Files Exported: 36
 Files Skipped: 0 (binary or large files)
 Output File: /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
 ===============================================================================

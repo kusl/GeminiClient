@@ -27,7 +27,7 @@ public class EnvironmentContextService : IEnvironmentContextService
         sb.AppendLine("### SYSTEM ENVIRONMENT CONTEXT ###");
         sb.AppendLine("You are running locally on the user's machine. The following context is 100% accurate and strictly defines your current reality:");
         sb.AppendLine();
-        
+
         // Temporal Grounding
         sb.AppendLine("[TEMPORAL DATA]");
         sb.AppendLine($"Local Time: {now:yyyy-MM-dd HH:mm:ss}");
@@ -51,9 +51,9 @@ public class EnvironmentContextService : IEnvironmentContextService
         sb.AppendLine("1. Use the Local Time above for any queries regarding 'now', 'today', or 'current time'.");
         sb.AppendLine("2. If asked about the system, refer to the OS Platform and User Name provided above.");
         sb.AppendLine("3. Do not Hallucinate the date. Trust this context over your training data.");
-        
+
         var instructionText = sb.ToString();
-        
+
         _logger.LogDebug("Generated System Instruction ({Length} chars)", instructionText.Length);
 
         return new Content
