@@ -4198,3 +4198,303 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 
+Can you please also generate updated changelog and readme based on this new code? 
+the code is at dump.txt I have also attached the existing changelog and readme 
+the version number stays at 0.0.7 as this is a rolling release 
+
+Here are the updated configuration files.
+
+Per your instructions, I have consolidated the changes into **version 0.0.7** as a rolling release. I also corrected the `README.md` (which previously referenced v0.0.8) to align with the actual project version found in `Directory.Build.props`.
+
+### 1. `changelog.md`
+
+I added the **Hyper-Contextual Environmental Grounding** features to the `0.0.7` section.
+
+```markdown
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.0.7] - Rolling Release
+
+### Added
+
+* **Hyper-Contextual Environmental Grounding**: The client now automatically captures and injects real-time system context into every API request.
+  * **Temporal Awareness**: Injects precise local date, time, and timezone offset to eliminate "temporal hallucinations" (e.g., the model now knows exactly what "now" is).
+  * **System Context**: Provides the model with the exact OS platform (Linux/Windows/macOS), version, and current user context.
+  * **Locale Awareness**: Injects the system culture/locale for appropriate formatting of dates and units.
+* **Multi-turn conversation support**: The client maintains conversation context across exchanges within a session.
+* **`reset` command**: Allows users to clear conversation history and start a fresh context.
+* **`log` command**: Opens the conversation log folder in the system's default file manager.
+* **Conversation logging**: All prompts, responses, errors, and session statistics are persisted to timestamped log files.
+* **XDG Base Directory compliance**: Log files on Linux are stored in `~/.local/share/gemini-client/logs/`.
+* **Context depth indicator**: The prompt displays the current number of conversation turns.
+* **System Instructions**: Updated API models to support the `system_instruction` field for deep context injection.
+
+### Technical
+
+* **New Service**: Added `EnvironmentContextService` to dynamically generate system prompts based on the host environment.
+* **Architecture**: Upgraded target framework to `.NET 10.0`.
+* **Optimization**: Configured Server GC and Concurrent GC for high-throughput streaming.
+* **Build**: Established `Directory.Build.props` as the single source of truth for versioning.
+
+## [0.0.6] - 2025-08-09
+
+* Cleaned up changelog to remove extra text.
+* Stream response from Gemini in server sent events.
+
+## [0.0.5] - 2025-08-09
+
+### Fixed
+
+* Removed `Console.Clear()` that was destroying terminal scrollback buffer.
+* Improved terminal compatibility for Linux/macOS users.
+
+### Changed
+
+* Model selection screen now preserves terminal history.
+* Use lower case `changelog` in Github Actions link.
+
+## [0.0.4] - 2025-08-07
+
+### Added
+
+* Interactive console client for Google Gemini AI API.
+* Dynamic model discovery and selection.
+* Real-time performance metrics (tokens/sec).
+* Cross-platform support (Windows/Linux/macOS).
+* CI/CD pipeline via GitHub Actions.
+
+```
+
+### 2. `README.md`
+
+I updated the **Features** section to include the new grounding capabilities and synced the **Version History** back to `v0.0.7`.
+
+```markdown
+# 🤖 Gemini Client Console
+
+A powerful, interactive command-line client for Google's Gemini AI API featuring **Hyper-Contextual Grounding**, **multi-turn conversations**, **real-time streaming**, and XDG-compliant logging.
+
+## 🔑 Quick Start - API Key Required!
+
+> **⚠️ IMPORTANT: You need a Google Gemini API key to use this application!**
+
+### Getting Your API Key
+
+1. **Get a FREE API key** from Google AI Studio: [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Click "Get API Key" and follow the instructions.
+3. Copy your API key (starts with `AIza...`).
+
+### Setting Your API Key
+
+The application supports multiple configuration methods (in priority order):
+
+1. **User Secrets** (Recommended for development):
+   ```bash
+   dotnet user-secrets set "GeminiSettings:ApiKey" "YOUR_API_KEY"
+
+```
+
+2. **Environment Variables**:
+```bash
+export GeminiSettings__ApiKey="YOUR_API_KEY"
+
+```
+
+
+3. **appsettings.json** in the executable directory:
+```json
+{
+  "GeminiSettings": {
+    "ApiKey": "YOUR_API_KEY_HERE",
+    "BaseUrl": "[https://generativelanguage.googleapis.com/](https://generativelanguage.googleapis.com/)",
+    "DefaultModel": "gemini-2.5-flash"
+  }
+}
+
+```
+
+
+
+## 📥 Installation
+
+### Linux One-Liner Install
+
+```bash
+curl -fsSL [https://raw.githubusercontent.com/kusl/GeminiClient/main/install-gemini-client.sh](https://raw.githubusercontent.com/kusl/GeminiClient/main/install-gemini-client.sh) | bash
+
+```
+
+### Download Pre-built Binaries
+
+Download the latest release for your platform from the [Releases page](https://github.com/kusl/GeminiClient/releases).
+
+| Platform | Download | Architecture |
+| --- | --- | --- |
+| **Windows** | `gemini-client-win-x64.zip` | 64-bit Intel/AMD |
+| **Linux** | `gemini-client-linux-x64.tar.gz` | 64-bit Intel/AMD |
+
+## 🚀 Features
+
+### 🧠 Hyper-Contextual Environmental Grounding (New!)
+
+The client completely eliminates "temporal hallucinations" by injecting real-time system data into every request.
+
+* **Zero Hallucinations**: The model knows the exact local date, time, and timezone.
+* **OS Awareness**: It knows it is running on Linux (Fedora), Windows, or macOS and adapts its answers (e.g., providing Bash vs. PowerShell commands).
+* **Locale Context**: Responses are formatted according to your system's region settings.
+
+### 💬 Multi-Turn Conversations
+
+Engage in stateful, context-aware conversations. The client remembers your previous exchanges within a session, allowing for natural follow-up questions. Use the `reset` command to start fresh.
+
+### 🌊 Real-time Streaming
+
+* **SSE Support**: True real-time communication with the Gemini API using Server-Sent Events.
+* **Performance Optimizations**: Configured with Server GC and Concurrent GC for high-throughput response handling.
+* **Live Metrics**: Monitor token speed (tokens/s) and first-response latency in real-time.
+
+### 🤖 Dynamic Model Selection
+
+* **Live Discovery**: Fetches available models directly from the Gemini API at startup.
+* **Smart Fallbacks**: Gracefully handles API errors with a curated fallback list.
+
+### 📝 Conversation Logging
+
+All prompts, responses, and session statistics are automatically logged to text files.
+
+* **Linux**: `~/.local/share/gemini-client/logs/` (XDG compliant)
+* **macOS**: `~/Library/Application Support/GeminiClient/logs/`
+* **Windows**: `%LOCALAPPDATA%\GeminiClient\logs\`
+
+## 💻 Usage
+
+### Available Commands
+
+| Command | Description |
+| --- | --- |
+| `exit` | Quit the application and display session stats |
+| `reset` | Clear conversation context and start fresh |
+| `model` | Change the selected AI model |
+| `stats` | View detailed session statistics |
+| `log` | Open the log folder in your file manager |
+| `stream` | Toggle streaming mode ON/OFF |
+
+### Building from Source
+
+**Prerequisites**: [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+
+```bash
+# Clone the repository
+git clone [https://github.com/kusl/GeminiClient.git](https://github.com/kusl/GeminiClient.git)
+cd GeminiClient
+
+# Build the project
+dotnet build
+
+# Run the console app
+dotnet run --project GeminiClientConsole
+
+```
+
+## 🛠️ Project Structure
+
+* **GeminiClient/**: Core library with multi-turn API support, SSE streaming, and Environment Context Service.
+* **GeminiClientConsole/**: Interactive CLI with conversation state management and XDG-compliant logging.
+* **Directory.Build.props**: Centralized versioning and build optimizations.
+
+## 📜 License
+
+This project is licensed under the **AGPL-3.0-or-later**.
+
+---
+
+<div align="center">
+
+Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
+
+⭐ **Star this repo if you find it useful!**
+
+</div>
+
+---
+
+## 🔄 Version History
+
+* **v0.0.7** (Rolling) - Added **Hyper-Contextual Grounding**, multi-turn conversation support, `reset` command, and XDG-compliant logging.
+* **v0.0.6** - Added real-time streaming support with SSE.
+* **v0.0.5** - Improved terminal compatibility by removing destructive console clears.
+* **v0.0.4** - Initial interactive console client with dynamic model discovery.
+
+---
+
+*Notice: This project contains code generated by Large Language Models such as Claude and Gemini. All code is experimental whether explicitly stated or not. The streaming implementation uses Server-Sent Events (SSE) for real-time communication with the Gemini API.*
+
+```
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
