@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Fri Jan  2 07:05:06 AM CST 2026
+Generated: Fri Jan  2 07:06:42 AM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -10,6 +10,8 @@ DIRECTORY STRUCTURE:
 .
 ├── docs
 │   ├── llm
+│   │   ├── output
+│   │   │   └── 00001.txt
 │   │   ├── collabskus_dump.txt
 │   │   ├── commands.txt
 │   │   ├── dump.txt
@@ -4090,7 +4092,7 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 
 ===============================================================================
-EXPORT COMPLETED: Fri Jan  2 07:05:07 AM CST 2026
+EXPORT COMPLETED: Fri Jan  2 07:06:42 AM CST 2026
 Total Files Found: 33
 Files Exported: 33
 Files Skipped: 0 (binary or large files)
