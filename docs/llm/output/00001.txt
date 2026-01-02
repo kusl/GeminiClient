@@ -332,4 +332,130 @@ The given project `GeminiClientConsole` has no updates given the current sources
 real	0m1.699s
 user	0m1.673s
 sys	0m0.250s
+kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/GeminiClient$ cd ~/src/dotnet/GeminiClient/; time dotnet format; time bash export.sh; time dotnet build; time dotnet test; time dotnet list package; time dotnet list package --outdated;
+
+real	0m6.174s
+user	0m8.832s
+sys	0m0.847s
+==============================================
+  Project Export for LLM Analysis
+==============================================
+
+Project Path: /home/kushal/src/dotnet/GeminiClient
+Output File:  docs/llm/dump.txt
+
+Generating directory structure...
+Collecting files...
+Found 34 files to export
+
+Processing (1/34): build-release.ps1
+Processing (2/34): changelog.md
+Processing (3/34): Directory.Build.props
+Processing (4/34): Directory.Packages.props
+Processing (5/34): .editorconfig
+Processing (6/34): export.sh
+Processing (7/34): GeminiClientConsole/AppRunner.cs
+Processing (8/34): GeminiClientConsole/appsettings.json
+Processing (9/34): GeminiClientConsole/ConsoleModelSelector.cs
+Processing (10/34): GeminiClientConsole/ConversationLogger.cs
+Processing (11/34): GeminiClientConsole/GeminiClientConsole.csproj
+Processing (12/34): GeminiClientConsole/Program.cs
+Processing (13/34): GeminiClient/GeminiApiClient.cs
+Processing (14/34): GeminiClient/GeminiApiException.cs
+Processing (15/34): GeminiClient/GeminiApiOptions.cs
+Processing (16/34): GeminiClient/GeminiApiOptionsValidator.cs
+Processing (17/34): GeminiClient/GeminiClient.csproj
+Processing (18/34): GeminiClient/IGeminiApiClient.cs
+Processing (19/34): GeminiClient/IModelService.cs
+Processing (20/34): GeminiClient/JsonSerializerContext.cs
+Processing (21/34): GeminiClient/ModelService.cs
+Processing (22/34): GeminiClient/Models/GeminiModel.cs
+Processing (23/34): GeminiClient/Models/GeminiRequest.cs
+Processing (24/34): GeminiClient/Models/GeminiResponse.cs
+Processing (25/34): GeminiClient/Models/ModelSelectionCriteria.cs
+Processing (26/34): GeminiClient/ServiceCollectionExtensions.cs
+Processing (27/34): .gitattributes
+Processing (28/34): .github/workflows/ci.yml
+Processing (29/34): .github/workflows/continuous-release.yml
+Processing (30/34): .gitignore
+Processing (31/34): install-gemini-client.sh
+Processing (32/34): LearningByDoing.sln
+Processing (33/34): README.md
+Processing (34/34): upgrade-grounding.sh
+
+==============================================
+  Export Complete!
+==============================================
+
+Output file:    docs/llm/dump.txt
+Files exported: 34
+Files skipped:  0
+Output size:    156.29 KB
+
+File types included:
+  • Source code: .cs, .fs, .vb
+  • UI/XAML: .axaml, .xaml, .paml
+  • Projects: .csproj, .slnx, .sln, .props, .targets
+  • Config: .json, .yaml, .yml, .xml, .config
+  • Docs: .md, .txt
+  • Scripts: .sh, .ps1, .cmd, .bat
+  • Other: .sql, .resx, .css, .scss, Dockerfile, etc.
+
+
+real	0m0.385s
+user	0m0.209s
+sys	0m0.252s
+Restore complete (0.5s)
+  GeminiClient net10.0 succeeded (0.3s) → GeminiClient/bin/Debug/net10.0/GeminiClient.dll
+  GeminiClientConsole net10.0 succeeded (0.1s) → GeminiClientConsole/bin/Debug/net10.0/GeminiClientConsole.dll
+
+Build succeeded in 1.2s
+
+real	0m1.363s
+user	0m1.131s
+sys	0m0.173s
+Restore complete (0.5s)
+
+Build succeeded in 0.7s
+
+real	0m0.863s
+user	0m0.893s
+sys	0m0.148s
+Restore complete (0.5s)
+
+Build succeeded in 0.6s
+Project 'GeminiClient' has the following package references
+   [net10.0]: 
+   Top-level Package                                      Requested    Resolved
+   > Microsoft.Extensions.Caching.Memory                  10.0.1       10.0.1  
+   > Microsoft.Extensions.Http                            10.0.1       10.0.1  
+   > Microsoft.Extensions.Logging.Configuration           10.0.1       10.0.1  
+   > Microsoft.Extensions.Options.DataAnnotations         10.0.1       10.0.1  
+   > Microsoft.NET.ILLink.Tasks                     (A)   [10.0.1, )   10.0.1  
+
+Project 'GeminiClientConsole' has the following package references
+   [net10.0]: 
+   Top-level Package                                     Requested   Resolved
+   > Microsoft.Extensions.Configuration                  10.0.1      10.0.1  
+   > Microsoft.Extensions.Configuration.UserSecrets      10.0.1      10.0.1  
+   > Microsoft.Extensions.Hosting                        10.0.1      10.0.1  
+
+(A) : Auto-referenced package.
+
+real	0m1.453s
+user	0m1.405s
+sys	0m0.251s
+Restore complete (0.5s)
+
+Build succeeded in 0.6s
+
+The following sources were used:
+   https://api.nuget.org/v3/index.json
+
+The given project `GeminiClient` has no updates given the current sources.
+The given project `GeminiClientConsole` has no updates given the current sources.
+
+real	0m2.231s
+user	0m1.962s
+sys	0m0.302s
 kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/GeminiClient$ 
