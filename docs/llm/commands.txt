@@ -1,1 +1,1 @@
-cd ~/src/dotnet/GeminiClient/; git status; git remote show origin; time dotnet restore; time dotnet clean; time dotnet build; time dotnet format; time dotnet list package --outdated; time bash export.sh
+cd ~/src/dotnet/GeminiClient/; time dotnet format; time bash export.sh; time dotnet build; time dotnet test; time dotnet list package; time dotnet list package --outdated;
