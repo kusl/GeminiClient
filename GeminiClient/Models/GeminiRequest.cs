@@ -1,10 +1,13 @@
-﻿// GeminiClient/Models/GeminiRequest.cs
+// GeminiClient/Models/GeminiRequest.cs
 using System.Text.Json.Serialization;
 
 namespace GeminiClient.Models;
 
 public class GeminiRequest
 {
+    [JsonPropertyName("system_instruction")]
+    public Content? SystemInstruction { get; set; }
+
     [JsonPropertyName("contents")]
     public List<Content> Contents { get; set; } = [];
 }

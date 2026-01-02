@@ -458,4 +458,24 @@ The given project `GeminiClientConsole` has no updates given the current sources
 real	0m2.231s
 user	0m1.962s
 sys	0m0.302s
+kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/GeminiClient$ time bash upgrade-grounding.sh 
+🚀 Starting Hyper-Contextual Environmental Grounding Upgrade...
+❌ Error: Please run this script from the root of the repository (where GeminiClient.sln is located).
+
+real	0m0.002s
+user	0m0.001s
+sys	0m0.001s
+kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/GeminiClient$ time bash upgrade-grounding.sh 
+🚀 Starting Hyper-Contextual Environmental Grounding Upgrade...
+📂 Creating Environmental Grounding Service...
+📝 Updating Data Models...
+🔌 Wiring up Dependency Injection...
+🧠 Injecting Context into API Client...
+✅ Upgrade Complete!
+Your Gemini Client now supports Hyper-Contextual Environmental Grounding.
+Run 'dotnet run --project GeminiClientConsole' to test it.
+
+real	0m0.008s
+user	0m0.002s
+sys	0m0.006s
 kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/GeminiClient$ 

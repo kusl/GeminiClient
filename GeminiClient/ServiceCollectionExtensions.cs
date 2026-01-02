@@ -1,4 +1,4 @@
-﻿// GeminiClient/ServiceCollectionExtensions.cs (Updated to avoid trimming warnings)
+// GeminiClient/ServiceCollectionExtensions.cs
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
@@ -43,8 +43,11 @@ public static class ServiceCollectionExtensions
         // Add validation
         services.AddSingleton<IValidateOptions<GeminiApiOptions>, GeminiApiOptionsValidator>();
 
-        // Add memory cache for model caching (if not already added)
+        // Add memory cache for model caching
         services.TryAddSingleton<IMemoryCache, MemoryCache>();
+
+        // REGISTER NEW GROUNDING SERVICE
+        services.TryAddSingleton<IEnvironmentContextService, EnvironmentContextService>();
 
         // Register ModelService with HttpClient
         _ = services.AddHttpClient<IModelService, ModelService>((serviceProvider, client) =>
@@ -67,4 +70,3 @@ public static class ServiceCollectionExtensions
         return services;
     }
 }
-

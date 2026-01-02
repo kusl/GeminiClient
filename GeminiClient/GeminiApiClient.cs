@@ -1,4 +1,4 @@
-﻿// GeminiClient/GeminiApiClient.cs
+// GeminiClient/GeminiApiClient.cs
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -14,12 +14,18 @@ public class GeminiApiClient : IGeminiApiClient
     private readonly HttpClient _httpClient;
     private readonly GeminiApiOptions _options;
     private readonly ILogger<GeminiApiClient> _logger;
+    private readonly IEnvironmentContextService _contextService;
 
-    public GeminiApiClient(HttpClient httpClient, IOptions<GeminiApiOptions> options, ILogger<GeminiApiClient> logger)
+    public GeminiApiClient(
+        HttpClient httpClient, 
+        IOptions<GeminiApiOptions> options, 
+        ILogger<GeminiApiClient> logger,
+        IEnvironmentContextService contextService)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _contextService = contextService ?? throw new ArgumentNullException(nameof(contextService));
 
         if (string.IsNullOrWhiteSpace(_options.ApiKey))
         {
@@ -57,9 +63,11 @@ public class GeminiApiClient : IGeminiApiClient
         };
         Uri requestUri = uriBuilder.Uri;
 
+        // INJECT SYSTEM INSTRUCTION HERE
         var requestBody = new GeminiRequest
         {
-            Contents = history
+            Contents = history,
+            SystemInstruction = _contextService.GetSystemInstruction()
         };
 
         _logger.LogInformation("Sending request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
@@ -70,7 +78,7 @@ public class GeminiApiClient : IGeminiApiClient
             using var jsonContent = new StringContent(jsonString, Encoding.UTF8, "application/json");
 
             using HttpResponseMessage response = await _httpClient.PostAsync(requestUri, jsonContent, cancellationToken);
-
+            
             if (!response.IsSuccessStatusCode)
             {
                 string errorContent = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -121,9 +129,11 @@ public class GeminiApiClient : IGeminiApiClient
         };
         Uri requestUri = uriBuilder.Uri;
 
+        // INJECT SYSTEM INSTRUCTION HERE
         var requestBody = new GeminiRequest
         {
-            Contents = history
+            Contents = history,
+            SystemInstruction = _contextService.GetSystemInstruction()
         };
 
         _logger.LogInformation("Sending streaming request to Gemini API: {Uri} with {Count} history items", requestUri, history.Count);
@@ -134,7 +144,7 @@ public class GeminiApiClient : IGeminiApiClient
         {
             Content = jsonContent
         };
-
+        
         request.Headers.Accept.Clear();
         request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
         request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
