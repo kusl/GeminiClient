@@ -1,0 +1,210 @@
+kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/MyImapDownloader$ gemini-client 
+info: GeminiClientConsole.AppRunner[0]
+      Application starting...
+📝 Conversation log: /home/kushal/.local/share/gemini-client/logs/conversation_2026-01-02_06-49-18.txt
+
+🤖 Available Gemini Models:                                                                                                                                                                                        
+═══════════════════════════
+  [1] gemini-flash-lite-latest - Latest release of Gemini Flash-Lite
+  [2] gemini-flash-latest - Latest release of Gemini Flash
+  [3] gemini-3-flash-preview - Gemini 3 Flash Preview
+  [4] gemini-2.5-flash-preview-tts - Gemini 2.5 Flash Preview TTS
+  [5] gemini-2.5-flash-preview-09-2025 - Gemini 2.5 Flash Preview Sep 2025
+  [6] gemini-2.5-flash-lite-preview-09-2025 - Preview release (Septempber 25th, 2025) of Gemini 2.5 Fla...
+  [7] gemini-2.5-flash-lite - Stable version of Gemini 2.5 Flash-Lite, released in July...
+  [8] gemini-2.5-flash-image-preview - Gemini 2.5 Flash Preview Image
+  [9] gemini-2.5-flash-image - Gemini 2.5 Flash Preview Image
+  [10] gemini-2.5-flash - Stable version of Gemini 2.5 Flash, our mid-size multimod...
+  [11] gemini-2.0-flash-lite-preview-02-05 - Preview release (February 5th, 2025) of Gemini 2.0 Flash-...
+  [12] gemini-2.0-flash-lite-preview - Preview release (February 5th, 2025) of Gemini 2.0 Flash-...
+  [13] gemini-2.0-flash-lite-001 - Stable version of Gemini 2.0 Flash-Lite
+  [14] gemini-2.0-flash-lite - Gemini 2.0 Flash-Lite
+  [15] gemini-2.0-flash-exp-image-generation - Gemini 2.0 Flash (Image Generation) Experimental
+  [16] gemini-2.0-flash-exp - Gemini 2.0 Flash Experimental
+  [17] gemini-2.0-flash-001 - Stable version of Gemini 2.0 Flash, our fast and versatil...
+  [18] gemini-2.0-flash - Gemini 2.0 Flash
+  [19] nano-banana-pro-preview - Gemini 3 Pro Image Preview
+  [20] gemini-pro-latest - Latest release of Gemini Pro
+  [21] gemini-3-pro-preview - Gemini 3 Pro Preview
+  [22] gemini-3-pro-image-preview - Gemini 3 Pro Image Preview
+  [23] gemini-2.5-pro-preview-tts - Gemini 2.5 Pro Preview TTS
+  [24] gemini-2.5-pro - Stable release (June 17th, 2025) of Gemini 2.5 Pro
+  [25] deep-research-pro-preview-12-2025 - Preview release (December 12th, 2025) of Deep Research Pro
+  [26] gemma-3n-e4b-it - Gemma 3n E4B
+  [27] gemma-3n-e2b-it - Gemma 3n E2B
+  [28] gemma-3-4b-it - Gemma 3 4B
+  [29] gemma-3-27b-it - Gemma 3 27B
+  [30] gemma-3-1b-it - Gemma 3 1B
+  [31] gemma-3-12b-it - Gemma 3 12B
+  [32] gemini-robotics-er-1.5-preview - Gemini Robotics-ER 1.5 Preview
+  [33] gemini-exp-1206 - Experimental release (March 25th, 2025) of Gemini 2.5 Pro
+  [34] gemini-2.5-computer-use-preview-10-2025 - Gemini 2.5 Computer Use Preview 10-2025
+
+Select a model (1-34) or press Enter for default [gemini-flash-lite-latest]: 
+✓ Selected: gemini-flash-lite-latest (default)
+🎉 Ready to go!
+info: GeminiClientConsole.ConsoleModelSelector[0]
+      Model selected: gemini-flash-lite-latest (default)
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+> what time is it in kathmandu?
+
+╭─── Streaming Response ───╮
+⚡ First response: 412ms
+
+The current time in Kathmandu, Nepal is **11:08 PM** on **Wednesday, October 25, 2023** (NPT - Nepal Standard Time).
+╰────────────────╯
+📊 Streaming Performance Metrics:
+   └─ Total Time: 538ms
+   └─ Words: 19 | Characters: 116
+   └─ Est. Tokens: ~29 | Speed: 53.9 tokens/s [█████░░░░░] 🚀
+   └─ Mode: 🌊 Streaming (real-time)
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+   (Context: 1 turns)
+> exit
+
+╔═══ Session Statistics ═══╗
+  📊 Total Requests: 1
+  ⏱  Average Response: 538ms
+  🚀 Fastest: 538ms
+  🐌 Slowest: 538ms
+  📝 Total Output: 116 characters
+  ⏰ Session Duration: 6.86s
+  🌊 Streaming: Enabled
+  💭 Context Depth: 1 turns
+
+  🤖 Models Used:
+     └─ gemini-flash-lite-latest: 1 requests (avg 0.54s)
+╚════════════════════════╝
+
+Goodbye! 👋
+info: GeminiClientConsole.AppRunner[0]
+      Application finished
+kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/MyImapDownloader$ 
+kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/MyImapDownloader$ cd ~/src/dotnet/GeminiClient/; time dotnet format; time bash export.sh; time dotnet build; time dotnet test; time dotnet list package; time dotnet list package --outdated;
+
+real	0m6.554s
+user	0m8.851s
+sys	0m0.866s
+==============================================
+  Project Export for LLM Analysis
+==============================================
+
+Project Path: /home/kushal/src/dotnet/GeminiClient
+Output File:  docs/llm/dump.txt
+
+Generating directory structure...
+Collecting files...
+Found 33 files to export
+
+Processing (1/33): build-release.ps1
+Processing (2/33): changelog.md
+Processing (3/33): Directory.Build.props
+Processing (4/33): Directory.Packages.props
+Processing (5/33): .editorconfig
+Processing (6/33): export.sh
+Processing (7/33): GeminiClientConsole/AppRunner.cs
+Processing (8/33): GeminiClientConsole/appsettings.json
+Processing (9/33): GeminiClientConsole/ConsoleModelSelector.cs
+Processing (10/33): GeminiClientConsole/ConversationLogger.cs
+Processing (11/33): GeminiClientConsole/GeminiClientConsole.csproj
+Processing (12/33): GeminiClientConsole/Program.cs
+Processing (13/33): GeminiClient/GeminiApiClient.cs
+Processing (14/33): GeminiClient/GeminiApiException.cs
+Processing (15/33): GeminiClient/GeminiApiOptions.cs
+Processing (16/33): GeminiClient/GeminiApiOptionsValidator.cs
+Processing (17/33): GeminiClient/GeminiClient.csproj
+Processing (18/33): GeminiClient/IGeminiApiClient.cs
+Processing (19/33): GeminiClient/IModelService.cs
+Processing (20/33): GeminiClient/JsonSerializerContext.cs
+Processing (21/33): GeminiClient/ModelService.cs
+Processing (22/33): GeminiClient/Models/GeminiModel.cs
+Processing (23/33): GeminiClient/Models/GeminiRequest.cs
+Processing (24/33): GeminiClient/Models/GeminiResponse.cs
+Processing (25/33): GeminiClient/Models/ModelSelectionCriteria.cs
+Processing (26/33): GeminiClient/ServiceCollectionExtensions.cs
+Processing (27/33): .gitattributes
+Processing (28/33): .github/workflows/ci.yml
+Processing (29/33): .github/workflows/continuous-release.yml
+Processing (30/33): .gitignore
+Processing (31/33): install-gemini-client.sh
+Processing (32/33): LearningByDoing.sln
+Processing (33/33): README.md
+
+==============================================
+  Export Complete!
+==============================================
+
+Output file:    docs/llm/dump.txt
+Files exported: 33
+Files skipped:  0
+Output size:    139.36 KB
+
+File types included:
+  • Source code: .cs, .fs, .vb
+  • UI/XAML: .axaml, .xaml, .paml
+  • Projects: .csproj, .slnx, .sln, .props, .targets
+  • Config: .json, .yaml, .yml, .xml, .config
+  • Docs: .md, .txt
+  • Scripts: .sh, .ps1, .cmd, .bat
+  • Other: .sql, .resx, .css, .scss, Dockerfile, etc.
+
+
+real	0m0.367s
+user	0m0.194s
+sys	0m0.242s
+Restore complete (0.5s)
+  GeminiClient net10.0 succeeded (2.9s) → GeminiClient/bin/Debug/net10.0/GeminiClient.dll
+  GeminiClientConsole net10.0 succeeded (0.4s) → GeminiClientConsole/bin/Debug/net10.0/GeminiClientConsole.dll
+
+Build succeeded in 4.0s
+
+real	0m4.201s
+user	0m1.456s
+sys	0m0.223s
+Restore complete (0.5s)
+
+Build succeeded in 0.8s
+
+real	0m0.918s
+user	0m0.938s
+sys	0m0.156s
+Restore complete (0.5s)
+
+Build succeeded in 0.6s
+Project 'GeminiClient' has the following package references
+   [net10.0]: 
+   Top-level Package                                      Requested    Resolved
+   > Microsoft.Extensions.Caching.Memory                  10.0.1       10.0.1  
+   > Microsoft.Extensions.Http                            10.0.1       10.0.1  
+   > Microsoft.Extensions.Logging.Configuration           10.0.1       10.0.1  
+   > Microsoft.Extensions.Options.DataAnnotations         10.0.1       10.0.1  
+   > Microsoft.NET.ILLink.Tasks                     (A)   [10.0.1, )   10.0.1  
+
+Project 'GeminiClientConsole' has the following package references
+   [net10.0]: 
+   Top-level Package                                     Requested   Resolved
+   > Microsoft.Extensions.Configuration                  10.0.1      10.0.1  
+   > Microsoft.Extensions.Configuration.UserSecrets      10.0.1      10.0.1  
+   > Microsoft.Extensions.Hosting                        10.0.1      10.0.1  
+
+(A) : Auto-referenced package.
+
+real	0m1.544s
+user	0m1.463s
+sys	0m0.270s
+Restore complete (0.5s)
+
+Build succeeded in 0.6s
+
+The following sources were used:
+   https://api.nuget.org/v3/index.json
+
+The given project `GeminiClient` has no updates given the current sources.
+The given project `GeminiClientConsole` has no updates given the current sources.
+
+real	0m4.076s
+user	0m2.196s
+sys	0m0.390s
+kushal@syn-2600-6c56-9840-001d-0000-0000-0000-1157:~/src/dotnet/GeminiClient$ 
