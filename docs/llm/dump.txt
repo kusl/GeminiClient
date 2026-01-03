@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Sat Jan  3 04:41:38 PM CST 2026
+Generated: Sat Jan  3 05:21:56 PM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -1594,8 +1594,8 @@ public class AppRunner : IDisposable
 
 ================================================================================
 FILE: GeminiClientConsole/appsettings.json
-SIZE: .45 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: .47 KB
+MODIFIED: 2026-01-03 17:06:36
 ================================================================================
 
 {
@@ -1610,7 +1610,7 @@ MODIFIED: 2025-12-24 13:18:10
     "AllowedHosts": "*",
     "GeminiSettings": {
         "ApiKey": "YOUR_GEMINI_API_KEY_FROM_CONFIG",
-        "BaseUrl": "https://generativelanguage.googleapis.com/",
+        "BaseUrl": "https://surge-updating-choosing-arctic.trycloudflare.com",
         "DefaultModel": "gemini-2.5-flash"
     }
 }
@@ -3330,11 +3330,10 @@ MODIFIED: 2026-01-03 16:34:18
 
 ================================================================================
 FILE: GeminiMockApi/Controllers/GeminiController.cs
-SIZE: 3.99 KB
-MODIFIED: 2026-01-03 16:41:38
+SIZE: 4.14 KB
+MODIFIED: 2026-01-03 17:21:55
 ================================================================================
 
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using GeminiMockApi.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -3346,104 +3345,111 @@ namespace GeminiMockApi.Controllers;
 public class GeminiController : ControllerBase
 {
     private readonly ILogger<GeminiController> _logger;
+    private static readonly Random _rng = new();
 
-    // Configurable "Stress Test" parameters
-    private const int STREAM_CHUNKS = 500;      // How many chunks to stream
-    private const int CHUNK_DELAY_MS = 10;      // Speed of streaming (lower is faster)
-    private const int CHUNK_SIZE = 50;          // Words per chunk
+    // The Client uses SourceGen (GeminiJsonContext) which expects camelCase.
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
     public GeminiController(ILogger<GeminiController> logger)
     {
         _logger = logger;
     }
 
-    /// <summary>
-    /// Discovery Endpoint: Returns the fake model so the client can select it.
-    /// </summary>
     [HttpGet]
     public IActionResult GetModels()
     {
-        _logger.LogInformation("Client requested model list.");
-
         var response = new ModelListResponse(new List<GeminiModel>
         {
             new GeminiModel(
                 name: "models/gemini-mock-turbo",
                 displayName: "Gemini Mock Turbo (Local)",
-                description: "High-throughput local simulation for stress testing streaming pipelines.",
+                description: "Local simulation. Try prompt: '100,20,50' (chunks,delay,words)",
                 supportedGenerationMethods: new[] { "generateContent" }
             )
         });
-
         return Ok(response);
     }
 
-    /// <summary>
-    /// Non-Streaming Endpoint: Returns a massive block of text instantly.
-    /// </summary>
     [HttpPost("{model}:generateContent")]
     public IActionResult GenerateContent(string model, [FromBody] GeminiRequest request)
     {
-        _logger.LogInformation($"Generating non-streaming content for {model}...");
-
-        var text = GenerateLoremIpsum(500); // Return 500 words
-
+        var text = GenerateLoremIpsum(50);
         var response = new GeminiResponse(new List<Candidate>
         {
             new Candidate(new Content(new List<Part> { new Part(text) }))
         });
-
         return Ok(response);
     }
 
-    /// <summary>
-    /// Streaming Endpoint: The Data Hose.
-    /// Uses Server-Sent Events (SSE) to flood the client with data.
-    /// </summary>
     [HttpPost("{model}:streamGenerateContent")]
     public async Task StreamGenerateContent(string model, [FromBody] GeminiRequest request)
     {
-        _logger.LogInformation($"⚡ STARTING STREAM for {model} (Target: {STREAM_CHUNKS} chunks)...");
+        string prompt = request.contents?.LastOrDefault()?.parts?.FirstOrDefault()?.text ?? "";
+        var (chunks, delay, size) = ParseStressParams(prompt);
 
-        Response.Headers.Append("Content-Type", "text/event-stream");
+        _logger.LogInformation($"⚡ START: {model} | Chunks: {chunks}, Delay: {delay}ms, Size: {size}");
+
+        Response.ContentType = "text/event-stream";
         Response.Headers.Append("Cache-Control", "no-cache");
         Response.Headers.Append("Connection", "keep-alive");
 
-        var writer = new StreamWriter(Response.Body);
-
-        for (int i = 0; i < STREAM_CHUNKS; i++)
+        // Use StreamWriter and ensure it stays open until the loop finishes
+        await using (var writer = new StreamWriter(Response.Body))
         {
-            // Simulate processing time (or remove for pure throughput testing)
-            if (CHUNK_DELAY_MS > 0)
-                await Task.Delay(CHUNK_DELAY_MS);
-
-            var chunkText = $"[{i + 1}/{STREAM_CHUNKS}]" + GenerateLoremIpsum(CHUNK_SIZE);
-
-
-            var payload = new GeminiResponse(new List<Candidate>
+            for (int i = 0; i < chunks; i++)
             {
-                new Candidate(new Content(new List<Part> { new Part(chunkText) }))
-            });
+                // Safety check for cancellation
+                if (HttpContext.RequestAborted.IsCancellationRequested) break;
 
-            // Format as SSE "data: {json}\n\n"
-            string json = JsonSerializer.Serialize(payload);
-            await writer.WriteAsync($"data: {json}\n\n");
-            await writer.FlushAsync();
+                if (delay > 0) await Task.Delay(delay);
+
+                var chunkText = $"[{i + 1}/{chunks}] " + GenerateLoremIpsum(size);
+                var payload = new GeminiResponse(new List<Candidate>
+                {
+                    new Candidate(new Content(new List<Part> { new Part(chunkText) }))
+                });
+
+                string json = JsonSerializer.Serialize(payload, _jsonOptions);
+
+                // Write the SSE data format: "data: {json}\n\n"
+                await writer.WriteAsync($"data: {json}\n\n");
+                await writer.FlushAsync();
+            }
         }
 
-        // Send completion signal if your client looks for one, 
-        // though standard Gemini client just stops when stream closes.
-        // await writer.WriteAsync("data: [DONE]\n\n");
-        // await writer.FlushAsync();
+        _logger.LogInformation("✅ FINISHED");
+    }
 
-        _logger.LogInformation("✅ STREAM COMPLETE");
+    private (int chunks, int delay, int size) ParseStressParams(string input)
+    {
+        if (!string.IsNullOrWhiteSpace(input))
+        {
+            var parts = input.Trim().Split(',');
+            if (parts.Length == 3 &&
+                int.TryParse(parts[0], out int c) &&
+                int.TryParse(parts[1], out int d) &&
+                int.TryParse(parts[2], out int s))
+            {
+                // CLAMP: Small values (like 1ms) can cause 502/Gateway errors 
+                // because the network buffer saturates too quickly.
+                return (c, Math.Max(d, 10), s);
+            }
+        }
+
+        return (
+            chunks: _rng.Next(50, 601),
+            delay: _rng.Next(10, 501), // Random default at least 10ms
+            size: _rng.Next(10, 101)
+        );
     }
 
     private static string GenerateLoremIpsum(int wordCount)
     {
-        var words = new[] { "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "performance", "testing", "stream", "buffer", "latency", "throughput", "dotnet", "async", "await", "task", "memory", "allocation" };
-        var rand = new Random();
-        return string.Join(" ", Enumerable.Range(0, wordCount).Select(_ => words[rand.Next(words.Length)]));
+        var words = new[] { "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "performance", "testing", "stream", "dotnet", "async", "task" };
+        return string.Join(" ", Enumerable.Range(0, wordCount).Select(_ => words[_rng.Next(words.Length)]));
     }
 }
 
@@ -3471,8 +3477,8 @@ MODIFIED: 2026-01-03 16:35:03
 
 ================================================================================
 FILE: GeminiMockApi/Models/GeminiDTOs.cs
-SIZE: .61 KB
-MODIFIED: 2026-01-03 16:38:36
+SIZE: .58 KB
+MODIFIED: 2026-01-03 17:21:55
 ================================================================================
 
 namespace GeminiMockApi.Models;
@@ -3487,8 +3493,8 @@ public record GeminiModel(
     string version = "1.0.0"
 );
 
-// Minimal request structure to accept payloads without validation errors
-public record GeminiRequest(List<object> contents);
+// Strongly typed to allow prompt extraction
+public record GeminiRequest(List<Content> contents);
 
 public record GeminiResponse(List<Candidate> candidates);
 public record Candidate(Content content, string finishReason = "STOP", int index = 0);
@@ -5130,7 +5136,7 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Sat Jan  3 04:41:38 PM CST 2026
+EXPORT COMPLETED: Sat Jan  3 05:21:56 PM CST 2026
 Total Files Found: 44
 Files Exported: 44
 Files Skipped: 0 (binary or large files)

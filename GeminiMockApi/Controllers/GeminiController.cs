@@ -12,9 +12,9 @@ public class GeminiController : ControllerBase
     private static readonly Random _rng = new();
 
     // The Client uses SourceGen (GeminiJsonContext) which expects camelCase.
-    private static readonly JsonSerializerOptions _jsonOptions = new() 
-    { 
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
     public GeminiController(ILogger<GeminiController> logger)
@@ -41,9 +41,9 @@ public class GeminiController : ControllerBase
     public IActionResult GenerateContent(string model, [FromBody] GeminiRequest request)
     {
         var text = GenerateLoremIpsum(50);
-        var response = new GeminiResponse(new List<Candidate> 
-        { 
-            new Candidate(new Content(new List<Part> { new Part(text) })) 
+        var response = new GeminiResponse(new List<Candidate>
+        {
+            new Candidate(new Content(new List<Part> { new Part(text) }))
         });
         return Ok(response);
     }
@@ -77,7 +77,7 @@ public class GeminiController : ControllerBase
                 });
 
                 string json = JsonSerializer.Serialize(payload, _jsonOptions);
-                
+
                 // Write the SSE data format: "data: {json}\n\n"
                 await writer.WriteAsync($"data: {json}\n\n");
                 await writer.FlushAsync();
@@ -92,9 +92,9 @@ public class GeminiController : ControllerBase
         if (!string.IsNullOrWhiteSpace(input))
         {
             var parts = input.Trim().Split(',');
-            if (parts.Length == 3 && 
-                int.TryParse(parts[0], out int c) && 
-                int.TryParse(parts[1], out int d) && 
+            if (parts.Length == 3 &&
+                int.TryParse(parts[0], out int c) &&
+                int.TryParse(parts[1], out int d) &&
                 int.TryParse(parts[2], out int s))
             {
                 // CLAMP: Small values (like 1ms) can cause 502/Gateway errors 
