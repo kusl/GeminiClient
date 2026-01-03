@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Fri Jan  2 07:11:07 AM CST 2026
+Generated: Sat Jan  3 04:33:45 PM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -50,6 +50,7 @@ DIRECTORY STRUCTURE:
 │       └── continuous-release.yml
 ├── build-release.ps1
 ├── changelog.md
+├── create-mock-api.sh
 ├── Directory.Build.props
 ├── Directory.Packages.props
 ├── .editorconfig
@@ -247,8 +248,8 @@ Write-Host "=================================================================" -
 
 ================================================================================
 FILE: changelog.md
-SIZE: 4.10 KB
-MODIFIED: 2025-12-24 19:02:37
+SIZE: 2.61 KB
+MODIFIED: 2026-01-02 07:15:24
 ================================================================================
 
 # Changelog
@@ -260,32 +261,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.0.7] - 2025-12-24
+## [0.0.7] - Rolling Release
 
 ### Added
 
-* **Multi-turn conversation support**: The client now maintains conversation context across exchanges within a session, enabling natural follow-up questions and iterative discussions.
-* **`reset` command**: Allows users to clear conversation history and start a fresh context without restarting the application.
+* **Hyper-Contextual Environmental Grounding**: The client now automatically captures and injects real-time system context into every API request.
+  * **Temporal Awareness**: Injects precise local date, time, and timezone offset to eliminate "temporal hallucinations" (e.g., the model now knows exactly what "now" is).
+  * **System Context**: Provides the model with the exact OS platform (Linux/Windows/macOS), version, and current user context.
+  * **Locale Awareness**: Injects the system culture/locale for appropriate formatting of dates and units.
+* **Multi-turn conversation support**: The client maintains conversation context across exchanges within a session.
+* **`reset` command**: Allows users to clear conversation history and start a fresh context.
 * **`log` command**: Opens the conversation log folder in the system's default file manager.
-* **Conversation logging**: All prompts, responses, errors, and session statistics are now persisted to timestamped log files.
-* **XDG Base Directory compliance**: Log files on Linux are stored in `~/.local/share/gemini-client/logs/` following the XDG specification. macOS and Windows use their respective standard locations.
-* **Context depth indicator**: The prompt now displays the current number of conversation turns.
-* Repository-wide performance optimizations for streaming.
-* Configured Server Garbage Collection and Concurrent GC for better real-time response handling.
-* Established `Directory.Build.props` as the single source of truth for versioning across the solution.
-* Central Package Management via `Directory.Packages.props`.
-
-### Changed
-
-* API client interface now supports passing full conversation history for stateful interactions.
-* `Content` model now includes a `Role` property to distinguish between user and model messages.
-* Session statistics now include context depth alongside other metrics.
+* **Conversation logging**: All prompts, responses, errors, and session statistics are persisted to timestamped log files.
+* **XDG Base Directory compliance**: Log files on Linux are stored in `~/.local/share/gemini-client/logs/`.
+* **Context depth indicator**: The prompt displays the current number of conversation turns.
+* **System Instructions**: Updated API models to support the `system_instruction` field for deep context injection.
 
 ### Technical
 
-* Upgraded target framework to `.NET 10.0`.
-* Implemented partial trimming for optimized single-file executables.
-* Added `ConversationLogger` class with proper resource management and thread-safe logging.
+* **New Service**: Added `EnvironmentContextService` to dynamically generate system prompts based on the host environment.
+* **Architecture**: Upgraded target framework to `.NET 10.0`.
+* **Optimization**: Configured Server GC and Concurrent GC for high-throughput streaming.
+* **Build**: Established `Directory.Build.props` as the single source of truth for versioning.
 
 ## [0.0.6] - 2025-08-09
 
@@ -309,58 +306,224 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 * Interactive console client for Google Gemini AI API.
-* Dynamic model discovery and selection with smart recommendations.
-* Real-time performance metrics with response time tracking and token speed analysis.
-* Session statistics tracking for all requests.
-* Support for multiple platform architectures (Windows x64/x86/ARM64, Linux x64/ARM/ARM64, macOS x64/ARM64).
-* Automated GitHub Actions CI/CD pipeline for cross-platform builds and releases.
-* Configuration support via `appsettings.json`, environment variables, and user secrets.
-* Smart error handling with automatic fallback to stable models.
-* Visual performance indicators for response speeds.
-* Model categorization (Flash, Pro, Ultra, Experimental).
+* Dynamic model discovery and selection.
+* Real-time performance metrics (tokens/sec).
+* Cross-platform support (Windows/Linux/macOS).
+* CI/CD pipeline via GitHub Actions.
 
-### Features
+================================================================================
+FILE: create-mock-api.sh
+SIZE: 7.23 KB
+MODIFIED: 2026-01-03 16:32:49
+================================================================================
 
-* **Model Management**: Automatic fetching of available Gemini models with detailed information.
-* **Performance Tracking**: Response time monitoring with tokens/second throughput analysis.
-* **Cross-Platform Support**: Self-contained executables for Windows, Linux, and macOS.
-* **Flexible Configuration**: Multiple configuration methods with proper precedence.
-* **Developer Experience**: Comprehensive error messages and user-friendly interface.
+#!/bin/bash
+set -e
 
-### Technical
+# ==============================================================================
+# Gemini Mock API Generator
+# Creates a high-throughput fake Gemini server for performance testing
+# ==============================================================================
 
-* Built with .NET 10.0 framework.
-* Self-contained, trimmed single-file executables.
-* Dependency injection with `Microsoft.Extensions.Hosting`.
-* Robust configuration management with validation.
-* Comprehensive logging support.
+echo "🚀 Initializing Gemini Mock API Project..."
 
-## [0.0.3] - 2025-08-07
+# 1. Create the Web API Project
+# We use --no-https to simplify local testing (no cert validation needed)
+if [ ! -d "GeminiMockApi" ]; then
+    dotnet new webapi -n GeminiMockApi -f net10.0 --no-https
+else
+    echo "Directory GeminiMockApi already exists, skipping creation..."
+fi
 
-### Fixed
+# 2. Add to Solution
+if [ -f "LearningByDoing.sln" ]; then
+    echo "📦 Adding project to solution..."
+    dotnet sln LearningByDoing.sln add GeminiMockApi/GeminiMockApi.csproj
+else
+    echo "⚠️  Solution file not found. Skipping sln add."
+fi
 
-* Clean up compiler warnings.
+# 3. Create Data Models (Simplified versions of the real ones)
+echo "📝 Generating Data Models..."
+mkdir -p GeminiMockApi/Models
+cat <<EOF > GeminiMockApi/Models/GeminiDTOs.cs
+namespace GeminiMockApi.Models;
 
-## [0.0.2] - 2025-08-07
+public record ModelListResponse(List<GeminiModel> models);
 
-### Fixed
+public record GeminiModel(
+    string name, 
+    string displayName, 
+    string description, 
+    string[] supportedGenerationMethods,
+    string version = "1.0.0"
+);
 
-* Remove errant character 'W' from code.
+// Minimal request structure to accept payloads without validation errors
+public record GeminiRequest(List<object> contents);
 
-## [0.0.1] - 2025-08-07
+public record GeminiResponse(List<Candidate> candidates);
+public record Candidate(Content content, string finishReason = "STOP", int index = 0);
+public record Content(List<Part> parts, string role = "model");
+public record Part(string text);
+EOF
 
-### Fixed
+# 4. Create the Controller
+# This implements the exact routes used by GeminiClient
+echo "⚙️  Generating Controller Logic..."
+cat <<EOF > GeminiMockApi/Controllers/GeminiController.cs
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using GeminiMockApi.Models;
+using Microsoft.AspNetCore.Mvc;
 
-* Properly configure trimming for JSON serialization.
+namespace GeminiMockApi.Controllers;
 
-## [0.0.0] - 2025-08-07
+[ApiController]
+[Route("v1beta/models")]
+public class GeminiController : ControllerBase
+{
+    private readonly ILogger<GeminiController> _logger;
+    
+    // Configurable "Stress Test" parameters
+    private const int STREAM_CHUNKS = 500;      // How many chunks to stream
+    private const int CHUNK_DELAY_MS = 10;      // Speed of streaming (lower is faster)
+    private const int CHUNK_SIZE = 50;          // Words per chunk
 
-### Added
+    public GeminiController(ILogger<GeminiController> logger)
+    {
+        _logger = logger;
+    }
 
-* 🎉 Initial commit: Gemini Client Console v1.0.0.
-* Basic project structure and foundation.
+    /// <summary>
+    /// Discovery Endpoint: Returns the fake model so the client can select it.
+    /// </summary>
+    [HttpGet]
+    public IActionResult GetModels()
+    {
+        _logger.LogInformation("Client requested model list.");
+        
+        var response = new ModelListResponse(new List<GeminiModel>
+        {
+            new GeminiModel(
+                name: "models/gemini-mock-turbo",
+                displayName: "Gemini Mock Turbo (Local)",
+                description: "High-throughput local simulation for stress testing streaming pipelines.",
+                supportedGenerationMethods: new[] { "generateContent" }
+            )
+        });
 
+        return Ok(response);
+    }
 
+    /// <summary>
+    /// Non-Streaming Endpoint: Returns a massive block of text instantly.
+    /// </summary>
+    [HttpPost("{model}:generateContent")]
+    public IActionResult GenerateContent(string model, [FromBody] GeminiRequest request)
+    {
+        _logger.LogInformation($"Generating non-streaming content for {model}...");
+        
+        var text = GenerateLoremIpsum(500); // Return 500 words
+        
+        var response = new GeminiResponse(new List<Candidate> 
+        { 
+            new Candidate(new Content(new List<Part> { new Part(text) })) 
+        });
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Streaming Endpoint: The Data Hose.
+    /// Uses Server-Sent Events (SSE) to flood the client with data.
+    /// </summary>
+    [HttpPost("{model}:streamGenerateContent")]
+    public async Task StreamGenerateContent(string model, [FromBody] GeminiRequest request)
+    {
+        _logger.LogInformation($"⚡ STARTING STREAM for {model} (Target: {STREAM_CHUNKS} chunks)...");
+
+        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
+
+        var writer = new StreamWriter(Response.Body);
+        
+        for (int i = 0; i < STREAM_CHUNKS; i++)
+        {
+            // Simulate processing time (or remove for pure throughput testing)
+            if (CHUNK_DELAY_MS > 0)
+                await Task.Delay(CHUNK_DELAY_MS);
+
+            var chunkText = \$\" [{i+1}/{STREAM_CHUNKS}] \" + GenerateLoremIpsum(CHUNK_SIZE);
+            
+            var payload = new GeminiResponse(new List<Candidate> 
+            { 
+                new Candidate(new Content(new List<Part> { new Part(chunkText) })) 
+            });
+
+            // Format as SSE "data: {json}\n\n"
+            string json = JsonSerializer.Serialize(payload);
+            await writer.WriteAsync(\$"data: {json}\n\n");
+            await writer.FlushAsync();
+        }
+
+        // Send completion signal if your client looks for one, 
+        // though standard Gemini client just stops when stream closes.
+        // await writer.WriteAsync("data: [DONE]\n\n");
+        // await writer.FlushAsync();
+        
+        _logger.LogInformation("✅ STREAM COMPLETE");
+    }
+
+    private static string GenerateLoremIpsum(int wordCount)
+    {
+        var words = new[] { "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "performance", "testing", "stream", "buffer", "latency", "throughput", "dotnet", "async", "await", "task", "memory", "allocation" };
+        var rand = new Random();
+        return string.Join(" ", Enumerable.Range(0, wordCount).Select(_ => words[rand.Next(words.Length)]));
+    }
+}
+EOF
+
+# 5. Update Program.cs
+echo "🔧 Configuring Startup..."
+cat <<EOF > GeminiMockApi/Program.cs
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddControllers();
+// Add CORS to allow requests from anywhere during testing
+builder.Services.AddCors(options => options.AddPolicy("AllowAll", policy => 
+    policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+
+var app = builder.Build();
+
+app.UseCors("AllowAll");
+app.MapControllers();
+
+Console.ForegroundColor = ConsoleColor.Green;
+Console.WriteLine("=================================================");
+Console.WriteLine("   ♊ GEMINI MOCK API RUNNING");
+Console.WriteLine("   📡 Listening on: http://localhost:5000");
+Console.WriteLine("=================================================");
+Console.ResetColor();
+
+app.Run("http://localhost:5000");
+EOF
+
+echo ""
+echo "✅ Mock API Created Successfully!"
+echo "================================================="
+echo "INSTRUCTIONS:"
+echo "1. Run the Mock API in a separate terminal:"
+echo "   dotnet run --project GeminiMockApi"
+echo ""
+echo "2. Configure your Client (GeminiClientConsole/appsettings.json) or Environment:"
+echo "   BaseUrl: \"http://localhost:5000/\""
+echo "   ApiKey:  \"any-text-works-locally\""
+echo ""
+echo "3. Run the Client:"
+echo "   dotnet run --project GeminiClientConsole"
+echo "================================================="
 
 
 ================================================================================
@@ -4055,13 +4218,13 @@ EndGlobal
 
 ================================================================================
 FILE: README.md
-SIZE: 5.29 KB
-MODIFIED: 2025-12-24 19:00:21
+SIZE: 5.06 KB
+MODIFIED: 2026-01-02 07:22:07
 ================================================================================
 
 # 🤖 Gemini Client Console
 
-A powerful, interactive command-line client for Google's Gemini AI API featuring **multi-turn conversations**, **real-time streaming**, dynamic model selection, XDG-compliant conversation logging, and detailed performance metrics.
+A powerful, interactive command-line client for Google's Gemini AI API featuring **Hyper-Contextual Grounding**, **multi-turn conversations**, **real-time streaming**, and XDG-compliant logging.
 
 ## 🔑 Quick Start - API Key Required!
 
@@ -4080,75 +4243,93 @@ The application supports multiple configuration methods (in priority order):
 1. **User Secrets** (Recommended for development):
    ```bash
    dotnet user-secrets set "GeminiSettings:ApiKey" "YOUR_API_KEY"
-   ```
+
+```
 
 2. **Environment Variables**:
-   ```bash
-   export GeminiSettings__ApiKey="YOUR_API_KEY"
-   ```
+```bash
+export GeminiSettings__ApiKey="YOUR_API_KEY"
+
+```
+
 
 3. **appsettings.json** in the executable directory:
-   ```json
-   {
-     "GeminiSettings": {
-       "ApiKey": "YOUR_API_KEY_HERE",
-       "BaseUrl": "https://generativelanguage.googleapis.com/",
-       "DefaultModel": "gemini-2.5-flash"
-     }
-   }
-   ```
+```json
+{
+  "GeminiSettings": {
+    "ApiKey": "YOUR_API_KEY_HERE",
+    "BaseUrl": "https://generativelanguage.googleapis.com/",
+    "DefaultModel": "gemini-2.5-flash"
+  }
+}
+
+```
+
+
 
 ## 📥 Installation
-
-### Download Pre-built Binaries
-
-Download the latest release for your platform from the [Releases page](https://github.com/kusl/GeminiClient/releases).
-
-| Platform    | Download                            | Architecture              |
-|-------------|-------------------------------------|---------------------------|
-| **Windows** | `gemini-client-win-x64.zip`         | 64-bit Intel/AMD          |
-| **Linux**   | `gemini-client-linux-x64.tar.gz`    | 64-bit Intel/AMD          |
-
-> **Note**: Self-contained binaries include the .NET 10 runtime. No separate installation required.
 
 ### Linux One-Liner Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/kusl/GeminiClient/main/install-gemini-client.sh | bash
+
 ```
+
+### Download Pre-built Binaries
+
+Download the latest release for your platform from the [Releases page](https://github.com/kusl/GeminiClient/releases).
+
+| Platform | Download | Architecture |
+| --- | --- | --- |
+| **Windows** | `gemini-client-win-x64.zip` | 64-bit Intel/AMD |
+| **Linux** | `gemini-client-linux-x64.tar.gz` | 64-bit Intel/AMD |
 
 ## 🚀 Features
 
+### 🧠 Hyper-Contextual Environmental Grounding (New!)
+
+The client completely eliminates "temporal hallucinations" by injecting real-time system data into every request.
+
+* **Zero Hallucinations**: The model knows the exact local date, time, and timezone.
+* **OS Awareness**: It knows it is running on Linux (Fedora), Windows, or macOS and adapts its answers (e.g., providing Bash vs. PowerShell commands).
+* **Locale Context**: Responses are formatted according to your system's region settings.
+
 ### 💬 Multi-Turn Conversations
-Engage in stateful, context-aware conversations. The client remembers your previous exchanges within a session, allowing for natural follow-up questions and iterative discussions. Use the `reset` command to start fresh.
+
+Engage in stateful, context-aware conversations. The client remembers your previous exchanges within a session, allowing for natural follow-up questions. Use the `reset` command to start fresh.
 
 ### 🌊 Real-time Streaming
-- **SSE Support**: True real-time communication with the Gemini API using Server-Sent Events.
-- **Performance Optimizations**: Configured with Server GC and Concurrent GC for high-throughput response handling.
-- **Live Metrics**: Monitor token speed (tokens/s) and first-response latency in real-time.
+
+* **SSE Support**: True real-time communication with the Gemini API using Server-Sent Events.
+* **Performance Optimizations**: Configured with Server GC and Concurrent GC for high-throughput response handling.
+* **Live Metrics**: Monitor token speed (tokens/s) and first-response latency in real-time.
 
 ### 🤖 Dynamic Model Selection
-- **Live Discovery**: Fetches available models directly from the Gemini API at startup.
-- **Smart Fallbacks**: Gracefully handles API errors with a curated fallback list.
+
+* **Live Discovery**: Fetches available models directly from the Gemini API at startup.
+* **Smart Fallbacks**: Gracefully handles API errors with a curated fallback list.
 
 ### 📝 Conversation Logging
-All prompts, responses, and session statistics are automatically logged to text files for review and debugging.
-- **Linux**: `~/.local/share/gemini-client/logs/` (XDG compliant)
-- **macOS**: `~/Library/Application Support/GeminiClient/logs/`
-- **Windows**: `%LOCALAPPDATA%\GeminiClient\logs\`
+
+All prompts, responses, and session statistics are automatically logged to text files.
+
+* **Linux**: `~/.local/share/gemini-client/logs/` (XDG compliant)
+* **macOS**: `~/Library/Application Support/GeminiClient/logs/`
+* **Windows**: `%LOCALAPPDATA%\GeminiClient\logs\`
 
 ## 💻 Usage
 
 ### Available Commands
 
-| Command  | Description                                      |
-|----------|--------------------------------------------------|
-| `exit`   | Quit the application and display session stats   |
-| `reset`  | Clear conversation context and start fresh       |
-| `model`  | Change the selected AI model                     |
-| `stats`  | View detailed session statistics                 |
-| `log`    | Open the log folder in your file manager         |
-| `stream` | Toggle streaming mode ON/OFF                     |
+| Command | Description |
+| --- | --- |
+| `exit` | Quit the application and display session stats |
+| `reset` | Clear conversation context and start fresh |
+| `model` | Change the selected AI model |
+| `stats` | View detailed session statistics |
+| `log` | Open the log folder in your file manager |
+| `stream` | Toggle streaming mode ON/OFF |
 
 ### Building from Source
 
@@ -4164,14 +4345,14 @@ dotnet build
 
 # Run the console app
 dotnet run --project GeminiClientConsole
+
 ```
 
 ## 🛠️ Project Structure
 
-- **GeminiClient/**: Core library with multi-turn API support and SSE streaming.
-- **GeminiClientConsole/**: Interactive CLI with conversation state management, animated model selection, and XDG-compliant logging.
-- **Directory.Build.props**: Centralized versioning and build optimizations.
-- **Directory.Packages.props**: Central Package Management for all NuGet dependencies.
+* **GeminiClient/**: Core library with multi-turn API support, SSE streaming, and Environment Context Service.
+* **GeminiClientConsole/**: Interactive CLI with conversation state management and XDG-compliant logging.
+* **Directory.Build.props**: Centralized versioning and build optimizations.
 
 ## 📜 License
 
@@ -4191,24 +4372,14 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 ## 🔄 Version History
 
-- **v0.0.8** (Current) - Added multi-turn conversation support, `reset` command, `log` command, and XDG-compliant conversation logging.
-- **v0.0.7** - Upgraded to .NET 10.0, implemented repository-wide performance optimizations for streaming, and centralized versioning.
-- **v0.0.6** - Added real-time streaming support with SSE.
-- **v0.0.5** - Improved terminal compatibility by removing destructive console clears.
-- **v0.0.4** - Initial interactive console client with dynamic model discovery.
+* **v0.0.7** (Rolling) - Added **Hyper-Contextual Grounding**, multi-turn conversation support, `reset` command, and XDG-compliant logging.
+* **v0.0.6** - Added real-time streaming support with SSE.
+* **v0.0.5** - Improved terminal compatibility by removing destructive console clears.
+* **v0.0.4** - Initial interactive console client with dynamic model discovery.
 
 ---
 
 *Notice: This project contains code generated by Large Language Models such as Claude and Gemini. All code is experimental whether explicitly stated or not. The streaming implementation uses Server-Sent Events (SSE) for real-time communication with the Gemini API.*
-
-
-
-
-
-
-
-
-
 
 
 ================================================================================
@@ -4661,9 +4832,9 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Fri Jan  2 07:11:08 AM CST 2026
-Total Files Found: 36
-Files Exported: 36
+EXPORT COMPLETED: Sat Jan  3 04:33:46 PM CST 2026
+Total Files Found: 37
+Files Exported: 37
 Files Skipped: 0 (binary or large files)
 Output File: /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
 ===============================================================================
