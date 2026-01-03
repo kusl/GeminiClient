@@ -4498,3 +4498,5 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 
 
 
+here we have a console app that can talk to google. for testing purposes, I would like to build a companion asp dotnet app that runs locally and can be a drop in replacement for Google generative AI, it only needs to return one model as an option and it doesn't need to be smart at all. It does need to have the endpoints necessary so that we can stream lots and lots of text from the web api to the console app for performance testing. Can you please write me a shell script that adds this web api using asp dotnet in a different project in the same solution as the dump.txt above? 
+
