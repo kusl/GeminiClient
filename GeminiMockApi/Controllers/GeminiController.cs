@@ -81,7 +81,7 @@ public class GeminiController : ControllerBase
             if (CHUNK_DELAY_MS > 0)
                 await Task.Delay(CHUNK_DELAY_MS);
 
-            var chunkText = $\" [{i+1}/{STREAM_CHUNKS}] \" + GenerateLoremIpsum(CHUNK_SIZE);
+            var chunkText = $"[{i+1}/{STREAM_CHUNKS}]" + GenerateLoremIpsum(CHUNK_SIZE);
 
 
             var payload = new GeminiResponse(new List<Candidate>
