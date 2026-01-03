@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Sat Jan  3 05:21:56 PM CST 2026
+Generated: Sat Jan  3 05:23:02 PM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -1594,8 +1594,8 @@ public class AppRunner : IDisposable
 
 ================================================================================
 FILE: GeminiClientConsole/appsettings.json
-SIZE: .47 KB
-MODIFIED: 2026-01-03 17:06:36
+SIZE: .45 KB
+MODIFIED: 2026-01-03 17:22:23
 ================================================================================
 
 {
@@ -1610,7 +1610,7 @@ MODIFIED: 2026-01-03 17:06:36
     "AllowedHosts": "*",
     "GeminiSettings": {
         "ApiKey": "YOUR_GEMINI_API_KEY_FROM_CONFIG",
-        "BaseUrl": "https://surge-updating-choosing-arctic.trycloudflare.com",
+        "BaseUrl": "https://generativelanguage.googleapis.com/",
         "DefaultModel": "gemini-2.5-flash"
     }
 }
@@ -5136,7 +5136,7 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Sat Jan  3 05:21:56 PM CST 2026
+EXPORT COMPLETED: Sat Jan  3 05:23:03 PM CST 2026
 Total Files Found: 44
 Files Exported: 44
 Files Skipped: 0 (binary or large files)
