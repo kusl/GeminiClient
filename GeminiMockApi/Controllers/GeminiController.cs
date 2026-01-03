@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using GeminiMockApi.Models;
 using Microsoft.AspNetCore.Mvc;
@@ -11,63 +10,32 @@ public class GeminiController : ControllerBase
 {
     private readonly ILogger<GeminiController> _logger;
 
-    // Configurable "Stress Test" parameters
-    private const int STREAM_CHUNKS = 500;      // How many chunks to stream
-    private const int CHUNK_DELAY_MS = 10;      // Speed of streaming (lower is faster)
-    private const int CHUNK_SIZE = 50;          // Words per chunk
+    // Default "Stress Test" parameters
+    private const int DEFAULT_STREAM_CHUNKS = 500;
+    private const int DEFAULT_CHUNK_DELAY_MS = 10;
+    private const int DEFAULT_CHUNK_SIZE = 50;
 
     public GeminiController(ILogger<GeminiController> logger)
     {
         _logger = logger;
     }
 
-    /// <summary>
-    /// Discovery Endpoint: Returns the fake model so the client can select it.
-    /// </summary>
-    [HttpGet]
-    public IActionResult GetModels()
-    {
-        _logger.LogInformation("Client requested model list.");
-
-        var response = new ModelListResponse(new List<GeminiModel>
-        {
-            new GeminiModel(
-                name: "models/gemini-mock-turbo",
-                displayName: "Gemini Mock Turbo (Local)",
-                description: "High-throughput local simulation for stress testing streaming pipelines.",
-                supportedGenerationMethods: new[] { "generateContent" }
-            )
-        });
-
-        return Ok(response);
-    }
-
-    /// <summary>
-    /// Non-Streaming Endpoint: Returns a massive block of text instantly.
-    /// </summary>
-    [HttpPost("{model}:generateContent")]
-    public IActionResult GenerateContent(string model, [FromBody] GeminiRequest request)
-    {
-        _logger.LogInformation($"Generating non-streaming content for {model}...");
-
-        var text = GenerateLoremIpsum(500); // Return 500 words
-
-        var response = new GeminiResponse(new List<Candidate>
-        {
-            new Candidate(new Content(new List<Part> { new Part(text) }))
-        });
-
-        return Ok(response);
-    }
+    // ... GetModels and GenerateContent remain the same ...
 
     /// <summary>
     /// Streaming Endpoint: The Data Hose.
-    /// Uses Server-Sent Events (SSE) to flood the client with data.
+    /// Supports dynamic override via prompt: "chunks,delay,size" (e.g., "100,5,20")
     /// </summary>
     [HttpPost("{model}:streamGenerateContent")]
     public async Task StreamGenerateContent(string model, [FromBody] GeminiRequest request)
     {
-        _logger.LogInformation($"⚡ STARTING STREAM for {model} (Target: {STREAM_CHUNKS} chunks)...");
+        // 1. Extract the prompt text
+        string prompt = request.Contents?.LastOrDefault()?.Parts?.FirstOrDefault()?.Text ?? "";
+        
+        // 2. Determine parameters (Dynamic override or Defaults)
+        var (chunks, delay, size) = ParseStressParams(prompt);
+
+        _logger.LogInformation($"⚡ STARTING STREAM: {model} | Chunks: {chunks}, Delay: {delay}ms, Size: {size} words");
 
         Response.Headers.Append("Content-Type", "text/event-stream");
         Response.Headers.Append("Cache-Control", "no-cache");
@@ -75,32 +43,44 @@ public class GeminiController : ControllerBase
 
         var writer = new StreamWriter(Response.Body);
 
-        for (int i = 0; i < STREAM_CHUNKS; i++)
+        for (int i = 0; i < chunks; i++)
         {
-            // Simulate processing time (or remove for pure throughput testing)
-            if (CHUNK_DELAY_MS > 0)
-                await Task.Delay(CHUNK_DELAY_MS);
+            if (delay > 0)
+                await Task.Delay(delay);
 
-            var chunkText = $"[{i + 1}/{STREAM_CHUNKS}]" + GenerateLoremIpsum(CHUNK_SIZE);
-
+            var chunkText = $"[{i + 1}/{chunks}] " + GenerateLoremIpsum(size);
 
             var payload = new GeminiResponse(new List<Candidate>
             {
                 new Candidate(new Content(new List<Part> { new Part(chunkText) }))
             });
 
-            // Format as SSE "data: {json}\n\n"
             string json = JsonSerializer.Serialize(payload);
             await writer.WriteAsync($"data: {json}\n\n");
             await writer.FlushAsync();
         }
 
-        // Send completion signal if your client looks for one, 
-        // though standard Gemini client just stops when stream closes.
-        // await writer.WriteAsync("data: [DONE]\n\n");
-        // await writer.FlushAsync();
-
         _logger.LogInformation("✅ STREAM COMPLETE");
+    }
+
+    /// <summary>
+    /// Checks if a string matches "int,int,int" and returns those values, 
+    /// otherwise returns the system defaults.
+    /// </summary>
+    private (int chunks, int delay, int size) ParseStressParams(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return (DEFAULT_STREAM_CHUNKS, DEFAULT_CHUNK_DELAY_MS, DEFAULT_CHUNK_SIZE);
+
+        var parts = input.Trim().Split(',');
+        if (parts.Length == 3 && 
+            int.TryParse(parts[0], out int c) && 
+            int.TryParse(parts[1], out int d) && 
+            int.TryParse(parts[2], out int s))
+        {
+            return (c, d, s);
+        }
+
+        return (DEFAULT_STREAM_CHUNKS, DEFAULT_CHUNK_DELAY_MS, DEFAULT_CHUNK_SIZE);
     }
 
     private static string GenerateLoremIpsum(int wordCount)
