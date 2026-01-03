@@ -15,33 +15,76 @@ public class GeminiController : ControllerBase
     private const int DEFAULT_CHUNK_DELAY_MS = 10;
     private const int DEFAULT_CHUNK_SIZE = 50;
 
+    // Use camelCase serialization to match the GeminiClient's expectations
+    private static readonly JsonSerializerOptions _jsonOptions = new() 
+    { 
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
+    };
+
     public GeminiController(ILogger<GeminiController> logger)
     {
         _logger = logger;
     }
 
-    // ... GetModels and GenerateContent remain the same ...
+    /// <summary>
+    /// Discovery Endpoint: Returns the fake model so the client can select it.
+    /// Fixes the 404 error seen in logs.
+    /// </summary>
+    [HttpGet]
+    public IActionResult GetModels()
+    {
+        _logger.LogInformation("Client requested model list.");
+        
+        var response = new ModelListResponse(new List<GeminiModel>
+        {
+            new GeminiModel(
+                name: "models/gemini-mock-turbo",
+                displayName: "Gemini Mock Turbo (Local)",
+                description: "High-throughput local simulation for stress testing.",
+                supportedGenerationMethods: new[] { "generateContent" }
+            )
+        });
+
+        return Ok(response);
+    }
 
     /// <summary>
-    /// Streaming Endpoint: The Data Hose.
-    /// Supports dynamic override via prompt: "chunks,delay,size" (e.g., "100,5,20")
+    /// Non-Streaming Endpoint.
+    /// </summary>
+    [HttpPost("{model}:generateContent")]
+    public IActionResult GenerateContent(string model, [FromBody] GeminiRequest request)
+    {
+        var prompt = request.contents?.LastOrDefault()?.parts?.FirstOrDefault()?.text ?? "";
+        _logger.LogInformation($"Generating non-streaming content for {model}. Prompt length: {prompt.Length}");
+        
+        var text = GenerateLoremIpsum(100);
+        var response = new GeminiResponse(new List<Candidate> 
+        { 
+            new Candidate(new Content(new List<Part> { new Part(text) })) 
+        });
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Streaming Endpoint: Supports dynamic override via prompt: "chunks,delay,size" (e.g., "100,5,20")
     /// </summary>
     [HttpPost("{model}:streamGenerateContent")]
     public async Task StreamGenerateContent(string model, [FromBody] GeminiRequest request)
     {
         // 1. Extract the prompt text
-        string prompt = request.Contents?.LastOrDefault()?.Parts?.FirstOrDefault()?.Text ?? "";
+        string prompt = request.contents?.LastOrDefault()?.parts?.FirstOrDefault()?.text ?? "";
         
         // 2. Determine parameters (Dynamic override or Defaults)
         var (chunks, delay, size) = ParseStressParams(prompt);
 
-        _logger.LogInformation($"⚡ STARTING STREAM: {model} | Chunks: {chunks}, Delay: {delay}ms, Size: {size} words");
+        _logger.LogInformation($"⚡ STARTING STREAM: {model} | Chunks: {chunks}, Delay: {delay}ms, Size: {size}");
 
         Response.Headers.Append("Content-Type", "text/event-stream");
         Response.Headers.Append("Cache-Control", "no-cache");
         Response.Headers.Append("Connection", "keep-alive");
 
-        var writer = new StreamWriter(Response.Body);
+        using var writer = new StreamWriter(Response.Body);
 
         for (int i = 0; i < chunks; i++)
         {
@@ -55,7 +98,8 @@ public class GeminiController : ControllerBase
                 new Candidate(new Content(new List<Part> { new Part(chunkText) }))
             });
 
-            string json = JsonSerializer.Serialize(payload);
+            // Serialize with camelCase options
+            string json = JsonSerializer.Serialize(payload, _jsonOptions);
             await writer.WriteAsync($"data: {json}\n\n");
             await writer.FlushAsync();
         }
@@ -63,13 +107,10 @@ public class GeminiController : ControllerBase
         _logger.LogInformation("✅ STREAM COMPLETE");
     }
 
-    /// <summary>
-    /// Checks if a string matches "int,int,int" and returns those values, 
-    /// otherwise returns the system defaults.
-    /// </summary>
     private (int chunks, int delay, int size) ParseStressParams(string input)
     {
-        if (string.IsNullOrWhiteSpace(input)) return (DEFAULT_STREAM_CHUNKS, DEFAULT_CHUNK_DELAY_MS, DEFAULT_CHUNK_SIZE);
+        if (string.IsNullOrWhiteSpace(input)) 
+            return (DEFAULT_STREAM_CHUNKS, DEFAULT_CHUNK_DELAY_MS, DEFAULT_CHUNK_SIZE);
 
         var parts = input.Trim().Split(',');
         if (parts.Length == 3 && 
@@ -85,7 +126,7 @@ public class GeminiController : ControllerBase
 
     private static string GenerateLoremIpsum(int wordCount)
     {
-        var words = new[] { "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "performance", "testing", "stream", "buffer", "latency", "throughput", "dotnet", "async", "await", "task", "memory", "allocation" };
+        var words = new[] { "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "performance", "testing", "stream", "dotnet", "async", "await", "task" };
         var rand = new Random();
         return string.Join(" ", Enumerable.Range(0, wordCount).Select(_ => words[rand.Next(words.Length)]));
     }
