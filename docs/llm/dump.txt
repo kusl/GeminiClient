@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Sat Jan  3 04:33:45 PM CST 2026
+Generated: Sat Jan  3 04:35:52 PM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -43,6 +43,16 @@ DIRECTORY STRUCTURE:
 │   ├── ConsoleModelSelector.cs
 │   ├── ConversationLogger.cs
 │   ├── GeminiClientConsole.csproj
+│   └── Program.cs
+├── GeminiMockApi
+│   ├── Models
+│   │   └── GeminiDTOs.cs
+│   ├── Properties
+│   │   └── launchSettings.json
+│   ├── appsettings.Development.json
+│   ├── appsettings.json
+│   ├── GeminiMockApi.csproj
+│   ├── GeminiMockApi.http
 │   └── Program.cs
 ├── .github
 │   └── workflows
@@ -569,8 +579,8 @@ MODIFIED: 2025-12-24 13:29:56
 
 ================================================================================
 FILE: Directory.Packages.props
-SIZE: 1.29 KB
-MODIFIED: 2025-12-24 14:32:53
+SIZE: 1.36 KB
+MODIFIED: 2026-01-03 16:35:24
 ================================================================================
 
 <Project>
@@ -596,6 +606,7 @@ MODIFIED: 2025-12-24 14:32:53
     <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.1" />
 
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
   </ItemGroup>
 </Project>
 
@@ -3283,6 +3294,156 @@ public static class ServiceCollectionExtensions
 
 
 ================================================================================
+FILE: GeminiMockApi/appsettings.Development.json
+SIZE: .11 KB
+MODIFIED: 2026-01-03 16:34:18
+================================================================================
+
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
+
+
+================================================================================
+FILE: GeminiMockApi/appsettings.json
+SIZE: .13 KB
+MODIFIED: 2026-01-03 16:34:18
+================================================================================
+
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}
+
+
+================================================================================
+FILE: GeminiMockApi/GeminiMockApi.csproj
+SIZE: .29 KB
+MODIFIED: 2026-01-03 16:35:03
+================================================================================
+
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
+</Project>
+
+
+================================================================================
+FILE: GeminiMockApi/Models/GeminiDTOs.cs
+SIZE: .61 KB
+MODIFIED: 2026-01-03 16:35:52
+================================================================================
+
+namespace GeminiMockApi.Models;
+
+public record ModelListResponse(List<GeminiModel> models);
+
+public record GeminiModel(
+    string name,
+    string displayName,
+    string description,
+    string[] supportedGenerationMethods,
+    string version = "1.0.0"
+);
+
+// Minimal request structure to accept payloads without validation errors
+public record GeminiRequest(List<object> contents);
+
+public record GeminiResponse(List<Candidate> candidates);
+public record Candidate(Content content, string finishReason = "STOP", int index = 0);
+public record Content(List<Part> parts, string role = "model");
+public record Part(string text);
+
+
+================================================================================
+FILE: GeminiMockApi/Program.cs
+SIZE: .97 KB
+MODIFIED: 2026-01-03 16:35:52
+================================================================================
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+
+var summaries = new[]
+{
+    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
+};
+
+app.MapGet("/weatherforecast", () =>
+{
+    var forecast = Enumerable.Range(1, 5).Select(index =>
+        new WeatherForecast
+        (
+            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
+            Random.Shared.Next(-20, 55),
+            summaries[Random.Shared.Next(summaries.Length)]
+        ))
+        .ToArray();
+    return forecast;
+})
+.WithName("GetWeatherForecast");
+
+app.Run();
+
+record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
+{
+    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+}
+
+
+================================================================================
+FILE: GeminiMockApi/Properties/launchSettings.json
+SIZE: .33 KB
+MODIFIED: 2026-01-03 16:34:18
+================================================================================
+
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5058",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+
+
+================================================================================
 FILE: .gitattributes
 SIZE: 2.45 KB
 MODIFIED: 2025-12-24 13:18:10
@@ -4179,33 +4340,67 @@ echo "Run the client by typing: $SYMLINK_NAME"
 
 ================================================================================
 FILE: LearningByDoing.sln
-SIZE: 1.59 KB
-MODIFIED: 2025-12-24 13:18:10
+SIZE: 3.98 KB
+MODIFIED: 2026-01-03 16:34:19
 ================================================================================
 
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.13.35919.96 d17.13
+VisualStudioVersion = 17.13.35919.96
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeminiClient", "GeminiClient\GeminiClient.csproj", "{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeminiClientConsole", "GeminiClientConsole\GeminiClientConsole.csproj", "{31CCAAB0-54F2-4889-B706-FCD7251370A7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeminiMockApi", "GeminiMockApi\GeminiMockApi.csproj", "{44C322BB-7FC5-4D64-997A-E29B906C6074}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|x64.Build.0 = Debug|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Debug|x86.Build.0 = Debug|Any CPU
 		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|x64.ActiveCfg = Release|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|x64.Build.0 = Release|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|x86.ActiveCfg = Release|Any CPU
+		{F02A93F3-0BDF-49BC-BDFC-84EBB9FB78FE}.Release|x86.Build.0 = Release|Any CPU
 		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|x64.Build.0 = Debug|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Debug|x86.Build.0 = Debug|Any CPU
 		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|x64.ActiveCfg = Release|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|x64.Build.0 = Release|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|x86.ActiveCfg = Release|Any CPU
+		{31CCAAB0-54F2-4889-B706-FCD7251370A7}.Release|x86.Build.0 = Release|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Debug|x64.Build.0 = Debug|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Debug|x86.Build.0 = Debug|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Release|Any CPU.Build.0 = Release|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Release|x64.ActiveCfg = Release|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Release|x64.Build.0 = Release|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Release|x86.ActiveCfg = Release|Any CPU
+		{44C322BB-7FC5-4D64-997A-E29B906C6074}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -4832,9 +5027,9 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Sat Jan  3 04:33:46 PM CST 2026
-Total Files Found: 37
-Files Exported: 37
+EXPORT COMPLETED: Sat Jan  3 04:35:52 PM CST 2026
+Total Files Found: 43
+Files Exported: 43
 Files Skipped: 0 (binary or large files)
 Output File: /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
 ===============================================================================
