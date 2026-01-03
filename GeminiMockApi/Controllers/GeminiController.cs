@@ -11,7 +11,7 @@ public class GeminiController : ControllerBase
     private readonly ILogger<GeminiController> _logger;
     private static readonly Random _rng = new();
 
-    // camelCase is required for the GeminiClient's SourceGen to work
+    // The Client uses SourceGen (GeminiJsonContext) which expects camelCase.
     private static readonly JsonSerializerOptions _jsonOptions = new() 
     { 
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase 
@@ -22,9 +22,6 @@ public class GeminiController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>
-    /// Discovery Endpoint: Fixes the 404 error from your logs.
-    /// </summary>
     [HttpGet]
     public IActionResult GetModels()
     {
@@ -33,7 +30,7 @@ public class GeminiController : ControllerBase
             new GeminiModel(
                 name: "models/gemini-mock-turbo",
                 displayName: "Gemini Mock Turbo (Local)",
-                description: "High-throughput local simulation with random defaults.",
+                description: "Local simulation. Try prompt: '100,20,50' (chunks,delay,words)",
                 supportedGenerationMethods: new[] { "generateContent" }
             )
         });
@@ -54,39 +51,44 @@ public class GeminiController : ControllerBase
     [HttpPost("{model}:streamGenerateContent")]
     public async Task StreamGenerateContent(string model, [FromBody] GeminiRequest request)
     {
-        // Extract prompt to check for "chunks,delay,size" overrides
         string prompt = request.contents?.LastOrDefault()?.parts?.FirstOrDefault()?.text ?? "";
-        
         var (chunks, delay, size) = ParseStressParams(prompt);
 
-        _logger.LogInformation($"⚡ STREAM START: {model} | Chunks: {chunks}, Delay: {delay}ms, Size: {size} words");
+        _logger.LogInformation($"⚡ START: {model} | Chunks: {chunks}, Delay: {delay}ms, Size: {size}");
 
-        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.ContentType = "text/event-stream";
         Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
 
-        using var writer = new StreamWriter(Response.Body);
-
-        for (int i = 0; i < chunks; i++)
+        // Use StreamWriter and ensure it stays open until the loop finishes
+        await using (var writer = new StreamWriter(Response.Body))
         {
-            if (delay > 0) await Task.Delay(delay);
-
-            var chunkText = $"[{i + 1}/{chunks}] " + GenerateLoremIpsum(size);
-            var payload = new GeminiResponse(new List<Candidate>
+            for (int i = 0; i < chunks; i++)
             {
-                new Candidate(new Content(new List<Part> { new Part(chunkText) }))
-            });
+                // Safety check for cancellation
+                if (HttpContext.RequestAborted.IsCancellationRequested) break;
 
-            string json = JsonSerializer.Serialize(payload, _jsonOptions);
-            await writer.WriteAsync($"data: {json}\n\n");
-            await writer.FlushAsync();
+                if (delay > 0) await Task.Delay(delay);
+
+                var chunkText = $"[{i + 1}/{chunks}] " + GenerateLoremIpsum(size);
+                var payload = new GeminiResponse(new List<Candidate>
+                {
+                    new Candidate(new Content(new List<Part> { new Part(chunkText) }))
+                });
+
+                string json = JsonSerializer.Serialize(payload, _jsonOptions);
+                
+                // Write the SSE data format: "data: {json}\n\n"
+                await writer.WriteAsync($"data: {json}\n\n");
+                await writer.FlushAsync();
+            }
         }
 
-        _logger.LogInformation("✅ STREAM COMPLETE");
+        _logger.LogInformation("✅ FINISHED");
     }
 
     private (int chunks, int delay, int size) ParseStressParams(string input)
     {
-        // Try to parse user override (format: "100,5,20")
         if (!string.IsNullOrWhiteSpace(input))
         {
             var parts = input.Trim().Split(',');
@@ -95,21 +97,22 @@ public class GeminiController : ControllerBase
                 int.TryParse(parts[1], out int d) && 
                 int.TryParse(parts[2], out int s))
             {
-                return (c, d, s);
+                // CLAMP: Small values (like 1ms) can cause 502/Gateway errors 
+                // because the network buffer saturates too quickly.
+                return (c, Math.Max(d, 10), s);
             }
         }
 
-        // Kicker: Generate fresh random defaults for every request if no valid override is found
         return (
-            chunks: _rng.Next(50, 601),   // 50-600
-            delay: _rng.Next(5, 501),    // 5-500ms
-            size: _rng.Next(10, 101)     // 10-100 words
+            chunks: _rng.Next(50, 601),
+            delay: _rng.Next(10, 501), // Random default at least 10ms
+            size: _rng.Next(10, 101)
         );
     }
 
     private static string GenerateLoremIpsum(int wordCount)
     {
-        var words = new[] { "lorem", "ipsum", "dolor", "sit", "performance", "stress", "latency", "dotnet", "stream", "buffer" };
+        var words = new[] { "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "performance", "testing", "stream", "dotnet", "async", "task" };
         return string.Join(" ", Enumerable.Range(0, wordCount).Select(_ => words[_rng.Next(words.Length)]));
     }
 }
