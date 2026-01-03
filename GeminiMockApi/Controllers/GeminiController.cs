@@ -10,7 +10,7 @@ namespace GeminiMockApi.Controllers;
 public class GeminiController : ControllerBase
 {
     private readonly ILogger<GeminiController> _logger;
-    
+
     // Configurable "Stress Test" parameters
     private const int STREAM_CHUNKS = 500;      // How many chunks to stream
     private const int CHUNK_DELAY_MS = 10;      // Speed of streaming (lower is faster)
@@ -28,7 +28,7 @@ public class GeminiController : ControllerBase
     public IActionResult GetModels()
     {
         _logger.LogInformation("Client requested model list.");
-        
+
         var response = new ModelListResponse(new List<GeminiModel>
         {
             new GeminiModel(
@@ -49,12 +49,12 @@ public class GeminiController : ControllerBase
     public IActionResult GenerateContent(string model, [FromBody] GeminiRequest request)
     {
         _logger.LogInformation($"Generating non-streaming content for {model}...");
-        
+
         var text = GenerateLoremIpsum(500); // Return 500 words
-        
-        var response = new GeminiResponse(new List<Candidate> 
-        { 
-            new Candidate(new Content(new List<Part> { new Part(text) })) 
+
+        var response = new GeminiResponse(new List<Candidate>
+        {
+            new Candidate(new Content(new List<Part> { new Part(text) }))
         });
 
         return Ok(response);
@@ -74,7 +74,7 @@ public class GeminiController : ControllerBase
         Response.Headers.Append("Connection", "keep-alive");
 
         var writer = new StreamWriter(Response.Body);
-        
+
         for (int i = 0; i < STREAM_CHUNKS; i++)
         {
             // Simulate processing time (or remove for pure throughput testing)
@@ -82,10 +82,11 @@ public class GeminiController : ControllerBase
                 await Task.Delay(CHUNK_DELAY_MS);
 
             var chunkText = $\" [{i+1}/{STREAM_CHUNKS}] \" + GenerateLoremIpsum(CHUNK_SIZE);
-            
-            var payload = new GeminiResponse(new List<Candidate> 
-            { 
-                new Candidate(new Content(new List<Part> { new Part(chunkText) })) 
+
+
+            var payload = new GeminiResponse(new List<Candidate>
+            {
+                new Candidate(new Content(new List<Part> { new Part(chunkText) }))
             });
 
             // Format as SSE "data: {json}\n\n"
@@ -98,7 +99,7 @@ public class GeminiController : ControllerBase
         // though standard Gemini client just stops when stream closes.
         // await writer.WriteAsync("data: [DONE]\n\n");
         // await writer.FlushAsync();
-        
+
         _logger.LogInformation("✅ STREAM COMPLETE");
     }
 

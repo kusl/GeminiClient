@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Sat Jan  3 04:35:52 PM CST 2026
+Generated: Sat Jan  3 04:38:36 PM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -45,6 +45,9 @@ DIRECTORY STRUCTURE:
 │   ├── GeminiClientConsole.csproj
 │   └── Program.cs
 ├── GeminiMockApi
+│   ├── Controllers
+│   │   ├── GeminiController.cs
+│   │   └── .gitkeep
 │   ├── Models
 │   │   └── GeminiDTOs.cs
 │   ├── Properties
@@ -3327,6 +3330,126 @@ MODIFIED: 2026-01-03 16:34:18
 
 
 ================================================================================
+FILE: GeminiMockApi/Controllers/GeminiController.cs
+SIZE: 3.99 KB
+MODIFIED: 2026-01-03 16:38:36
+================================================================================
+
+using System.Runtime.CompilerServices;
+using System.Text.Json;
+using GeminiMockApi.Models;
+using Microsoft.AspNetCore.Mvc;
+
+namespace GeminiMockApi.Controllers;
+
+[ApiController]
+[Route("v1beta/models")]
+public class GeminiController : ControllerBase
+{
+    private readonly ILogger<GeminiController> _logger;
+
+    // Configurable "Stress Test" parameters
+    private const int STREAM_CHUNKS = 500;      // How many chunks to stream
+    private const int CHUNK_DELAY_MS = 10;      // Speed of streaming (lower is faster)
+    private const int CHUNK_SIZE = 50;          // Words per chunk
+
+    public GeminiController(ILogger<GeminiController> logger)
+    {
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Discovery Endpoint: Returns the fake model so the client can select it.
+    /// </summary>
+    [HttpGet]
+    public IActionResult GetModels()
+    {
+        _logger.LogInformation("Client requested model list.");
+
+        var response = new ModelListResponse(new List<GeminiModel>
+        {
+            new GeminiModel(
+                name: "models/gemini-mock-turbo",
+                displayName: "Gemini Mock Turbo (Local)",
+                description: "High-throughput local simulation for stress testing streaming pipelines.",
+                supportedGenerationMethods: new[] { "generateContent" }
+            )
+        });
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Non-Streaming Endpoint: Returns a massive block of text instantly.
+    /// </summary>
+    [HttpPost("{model}:generateContent")]
+    public IActionResult GenerateContent(string model, [FromBody] GeminiRequest request)
+    {
+        _logger.LogInformation($"Generating non-streaming content for {model}...");
+
+        var text = GenerateLoremIpsum(500); // Return 500 words
+
+        var response = new GeminiResponse(new List<Candidate>
+        {
+            new Candidate(new Content(new List<Part> { new Part(text) }))
+        });
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Streaming Endpoint: The Data Hose.
+    /// Uses Server-Sent Events (SSE) to flood the client with data.
+    /// </summary>
+    [HttpPost("{model}:streamGenerateContent")]
+    public async Task StreamGenerateContent(string model, [FromBody] GeminiRequest request)
+    {
+        _logger.LogInformation($"⚡ STARTING STREAM for {model} (Target: {STREAM_CHUNKS} chunks)...");
+
+        Response.Headers.Append("Content-Type", "text/event-stream");
+        Response.Headers.Append("Cache-Control", "no-cache");
+        Response.Headers.Append("Connection", "keep-alive");
+
+        var writer = new StreamWriter(Response.Body);
+
+        for (int i = 0; i < STREAM_CHUNKS; i++)
+        {
+            // Simulate processing time (or remove for pure throughput testing)
+            if (CHUNK_DELAY_MS > 0)
+                await Task.Delay(CHUNK_DELAY_MS);
+
+            var chunkText = $\" [{i+1}/{STREAM_CHUNKS}] \" + GenerateLoremIpsum(CHUNK_SIZE);
+
+
+            var payload = new GeminiResponse(new List<Candidate>
+            {
+                new Candidate(new Content(new List<Part> { new Part(chunkText) }))
+            });
+
+            // Format as SSE "data: {json}\n\n"
+            string json = JsonSerializer.Serialize(payload);
+            await writer.WriteAsync($"data: {json}\n\n");
+            await writer.FlushAsync();
+        }
+
+        // Send completion signal if your client looks for one, 
+        // though standard Gemini client just stops when stream closes.
+        // await writer.WriteAsync("data: [DONE]\n\n");
+        // await writer.FlushAsync();
+
+        _logger.LogInformation("✅ STREAM COMPLETE");
+    }
+
+    private static string GenerateLoremIpsum(int wordCount)
+    {
+        var words = new[] { "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "performance", "testing", "stream", "buffer", "latency", "throughput", "dotnet", "async", "await", "task", "memory", "allocation" };
+        var rand = new Random();
+        return string.Join(" ", Enumerable.Range(0, wordCount).Select(_ => words[rand.Next(words.Length)]));
+    }
+}
+
+
+================================================================================
 FILE: GeminiMockApi/GeminiMockApi.csproj
 SIZE: .29 KB
 MODIFIED: 2026-01-03 16:35:03
@@ -3350,7 +3473,7 @@ MODIFIED: 2026-01-03 16:35:03
 ================================================================================
 FILE: GeminiMockApi/Models/GeminiDTOs.cs
 SIZE: .61 KB
-MODIFIED: 2026-01-03 16:35:52
+MODIFIED: 2026-01-03 16:38:36
 ================================================================================
 
 namespace GeminiMockApi.Models;
@@ -3376,49 +3499,30 @@ public record Part(string text);
 
 ================================================================================
 FILE: GeminiMockApi/Program.cs
-SIZE: .97 KB
-MODIFIED: 2026-01-03 16:35:52
+SIZE: .71 KB
+MODIFIED: 2026-01-03 16:38:36
 ================================================================================
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+// Add CORS to allow requests from anywhere during testing
+builder.Services.AddCors(options => options.AddPolicy("AllowAll", policy =>
+    policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
+app.UseCors("AllowAll");
+app.MapControllers();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+Console.ForegroundColor = ConsoleColor.Green;
+Console.WriteLine("=================================================");
+Console.WriteLine("   ♊ GEMINI MOCK API RUNNING");
+Console.WriteLine("   📡 Listening on: http://localhost:5000");
+Console.WriteLine("=================================================");
+Console.ResetColor();
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
-app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+app.Run("http://localhost:5000");
 
 
 ================================================================================
@@ -4341,7 +4445,7 @@ echo "Run the client by typing: $SYMLINK_NAME"
 ================================================================================
 FILE: LearningByDoing.sln
 SIZE: 3.98 KB
-MODIFIED: 2026-01-03 16:34:19
+MODIFIED: 2026-01-03 16:37:57
 ================================================================================
 
 ﻿
@@ -5027,9 +5131,9 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Sat Jan  3 04:35:52 PM CST 2026
-Total Files Found: 43
-Files Exported: 43
+EXPORT COMPLETED: Sat Jan  3 04:38:36 PM CST 2026
+Total Files Found: 44
+Files Exported: 44
 Files Skipped: 0 (binary or large files)
 Output File: /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
 ===============================================================================

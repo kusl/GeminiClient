@@ -3,9 +3,9 @@ namespace GeminiMockApi.Models;
 public record ModelListResponse(List<GeminiModel> models);
 
 public record GeminiModel(
-    string name, 
-    string displayName, 
-    string description, 
+    string name,
+    string displayName,
+    string description,
     string[] supportedGenerationMethods,
     string version = "1.0.0"
 );

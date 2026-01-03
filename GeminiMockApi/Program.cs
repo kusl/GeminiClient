@@ -2,7 +2,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 // Add CORS to allow requests from anywhere during testing
-builder.Services.AddCors(options => options.AddPolicy("AllowAll", policy => 
+builder.Services.AddCors(options => options.AddPolicy("AllowAll", policy =>
     policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
 var app = builder.Build();
