@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Sat Jan  3 04:40:01 PM CST 2026
+Generated: Sat Jan  3 04:41:38 PM CST 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -46,8 +46,7 @@ DIRECTORY STRUCTURE:
 │   └── Program.cs
 ├── GeminiMockApi
 │   ├── Controllers
-│   │   ├── GeminiController.cs
-│   │   └── .gitkeep
+│   │   └── GeminiController.cs
 │   ├── Models
 │   │   └── GeminiDTOs.cs
 │   ├── Properties
@@ -3332,7 +3331,7 @@ MODIFIED: 2026-01-03 16:34:18
 ================================================================================
 FILE: GeminiMockApi/Controllers/GeminiController.cs
 SIZE: 3.99 KB
-MODIFIED: 2026-01-03 16:38:36
+MODIFIED: 2026-01-03 16:41:38
 ================================================================================
 
 using System.Runtime.CompilerServices;
@@ -3418,7 +3417,7 @@ public class GeminiController : ControllerBase
             if (CHUNK_DELAY_MS > 0)
                 await Task.Delay(CHUNK_DELAY_MS);
 
-            var chunkText = $\" [{i+1}/{STREAM_CHUNKS}] \" + GenerateLoremIpsum(CHUNK_SIZE);
+            var chunkText = $"[{i + 1}/{STREAM_CHUNKS}]" + GenerateLoremIpsum(CHUNK_SIZE);
 
 
             var payload = new GeminiResponse(new List<Candidate>
@@ -5131,7 +5130,7 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Sat Jan  3 04:40:02 PM CST 2026
+EXPORT COMPLETED: Sat Jan  3 04:41:38 PM CST 2026
 Total Files Found: 44
 Files Exported: 44
 Files Skipped: 0 (binary or large files)
