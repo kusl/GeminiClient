@@ -1,0 +1,6 @@
+@GeminiMockApi_HostAddress = http://localhost:5058
+
+GET {{GeminiMockApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
