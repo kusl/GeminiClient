@@ -588,3 +588,113 @@ The version remains 0.0.7, and the CI will produce releases like `v0.0.7.45`, `v
 
 
 
+
+
+
+
+
+
+
+
+
+
+Here is my directory.props 
+```xml
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="10.0.1" />
+
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.1" />
+  </ItemGroup>
+</Project>
+```
+here are the updates available 
+Project `GeminiClient` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                                   Requested   Resolved   Latest
+   > Microsoft.Extensions.Caching.Memory               10.0.1      10.0.1     10.0.5
+   > Microsoft.Extensions.Http                         10.0.1      10.0.1     10.0.5
+   > Microsoft.Extensions.Logging.Configuration        10.0.1      10.0.1     10.0.5
+   > Microsoft.Extensions.Options.DataAnnotations      10.0.1      10.0.1     10.0.5
+
+Project `GeminiClientConsole` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                                     Requested   Resolved   Latest
+   > Microsoft.Extensions.Configuration                  10.0.1      10.0.1     10.0.5
+   > Microsoft.Extensions.Configuration.UserSecrets      10.0.1      10.0.1     10.0.5
+   > Microsoft.Extensions.Hosting                        10.0.1      10.0.1     10.0.5
+
+Project `GeminiMockApi` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                   Requested   Resolved   Latest
+   > Microsoft.AspNetCore.OpenApi      10.0.1      10.0.1     10.0.5
+however, I don't want to update them one by one. 
+you can group nuget packages that update together with variables. 
+use variables where ever possible 
+and please give me the full updated file 
+do not hallucinate
+
+00
+31
+
+Looking at the packages, they're all `Microsoft.Extensions.*` and `Microsoft.AspNetCore.*` from the same .NET 10 release train — they version together. I can consolidate them under a single variable.All packages share the same .NET 10 release cadence, so a single `MicrosoftExtensionsVersion` variable covers everything — including `Microsoft.AspNetCore.OpenApi`, which ships in lockstep with the Extensions packages. Now when the next update drops, you just change `10.0.5` in one place.
+
+```xml
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <MicrosoftExtensionsVersion>10.0.5</MicrosoftExtensionsVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsVersion)" />
+
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.UserSecrets" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="$(MicrosoftExtensionsVersion)" />
+
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="$(MicrosoftExtensionsVersion)" />
+
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Polly" Version="$(MicrosoftExtensionsVersion)" />
+
+    <PackageVersion Include="Microsoft.Extensions.Logging.Configuration" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="$(MicrosoftExtensionsVersion)" />
+
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftExtensionsVersion)" />
+  </ItemGroup>
+</Project>
+```
+00
+31
+
+
+
+
+
+
+
+
+

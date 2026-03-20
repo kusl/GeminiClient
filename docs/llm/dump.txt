@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Sat Jan  3 05:23:02 PM CST 2026
+Generated: Fri Mar 20 01:26:45 AM EDT 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -11,7 +11,8 @@ DIRECTORY STRUCTURE:
 ├── docs
 │   ├── llm
 │   │   ├── output
-│   │   │   └── 00001.txt
+│   │   │   ├── 00001.txt
+│   │   │   └── 00002.txt
 │   │   ├── collabskus_dump.txt
 │   │   ├── commands.txt
 │   │   ├── dump.txt
@@ -81,7 +82,7 @@ FILE CONTENTS:
 ================================================================================
 FILE: build-release.ps1
 SIZE: 6.47 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 # build-release.ps1 - PowerShell script for local builds
@@ -261,7 +262,7 @@ Write-Host "=================================================================" -
 ================================================================================
 FILE: changelog.md
 SIZE: 2.61 KB
-MODIFIED: 2026-01-02 07:15:24
+MODIFIED: 2026-01-02 08:15:24
 ================================================================================
 
 # Changelog
@@ -326,7 +327,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ================================================================================
 FILE: create-mock-api.sh
 SIZE: 7.23 KB
-MODIFIED: 2026-01-03 16:32:49
+MODIFIED: 2026-01-03 17:32:49
 ================================================================================
 
 #!/bin/bash
@@ -541,7 +542,7 @@ echo "================================================="
 ================================================================================
 FILE: Directory.Build.props
 SIZE: 1.23 KB
-MODIFIED: 2025-12-24 13:29:56
+MODIFIED: 2025-12-24 14:29:56
 ================================================================================
 
 <Project>
@@ -582,7 +583,7 @@ MODIFIED: 2025-12-24 13:29:56
 ================================================================================
 FILE: Directory.Packages.props
 SIZE: 1.36 KB
-MODIFIED: 2026-01-03 16:35:24
+MODIFIED: 2026-01-03 17:35:24
 ================================================================================
 
 <Project>
@@ -616,7 +617,7 @@ MODIFIED: 2026-01-03 16:35:24
 ================================================================================
 FILE: .editorconfig
 SIZE: 7.61 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 # editorconfig.org
@@ -813,7 +814,7 @@ end_of_line = crlf
 ================================================================================
 FILE: export.sh
 SIZE: 8.50 KB
-MODIFIED: 2025-12-24 13:19:57
+MODIFIED: 2025-12-24 14:19:57
 ================================================================================
 
 #!/bin/bash
@@ -1080,7 +1081,7 @@ echo ""
 ================================================================================
 FILE: GeminiClientConsole/AppRunner.cs
 SIZE: 19.27 KB
-MODIFIED: 2025-12-24 15:11:44
+MODIFIED: 2025-12-24 16:11:44
 ================================================================================
 
 ﻿// GeminiClientConsole/AppRunner.cs
@@ -1595,7 +1596,7 @@ public class AppRunner : IDisposable
 ================================================================================
 FILE: GeminiClientConsole/appsettings.json
 SIZE: .45 KB
-MODIFIED: 2026-01-03 17:22:23
+MODIFIED: 2026-01-03 18:22:23
 ================================================================================
 
 {
@@ -1619,7 +1620,7 @@ MODIFIED: 2026-01-03 17:22:23
 ================================================================================
 FILE: GeminiClientConsole/ConsoleModelSelector.cs
 SIZE: 7.52 KB
-MODIFIED: 2025-12-24 14:51:09
+MODIFIED: 2025-12-24 15:51:09
 ================================================================================
 
 ﻿// GeminiClientConsole/ConsoleModelSelector.cs
@@ -1841,7 +1842,7 @@ public class ConsoleModelSelector
 ================================================================================
 FILE: GeminiClientConsole/ConversationLogger.cs
 SIZE: 10.48 KB
-MODIFIED: 2025-12-24 14:50:04
+MODIFIED: 2025-12-24 15:50:04
 ================================================================================
 
 // GeminiClientConsole/ConversationLogger.cs
@@ -2121,7 +2122,7 @@ public class ConversationLogger : IDisposable
 ================================================================================
 FILE: GeminiClientConsole/GeminiClientConsole.csproj
 SIZE: 1.49 KB
-MODIFIED: 2025-12-24 14:23:09
+MODIFIED: 2025-12-24 15:23:09
 ================================================================================
 
 ﻿<!-- GeminiClientConsole/GeminiClientConsole.csproj -->
@@ -2174,7 +2175,7 @@ MODIFIED: 2025-12-24 14:23:09
 ================================================================================
 FILE: GeminiClientConsole/Program.cs
 SIZE: 2.42 KB
-MODIFIED: 2025-12-24 15:49:51
+MODIFIED: 2025-12-24 16:49:51
 ================================================================================
 
 ﻿// GeminiClientConsole/Program.cs
@@ -2248,7 +2249,7 @@ public class Program
 ================================================================================
 FILE: GeminiClient/EnvironmentContextService.cs
 SIZE: 2.79 KB
-MODIFIED: 2026-01-02 07:10:32
+MODIFIED: 2026-01-02 08:10:32
 ================================================================================
 
 // GeminiClient/EnvironmentContextService.cs
@@ -2329,7 +2330,7 @@ public class EnvironmentContextService : IEnvironmentContextService
 ================================================================================
 FILE: GeminiClient/GeminiApiClient.cs
 SIZE: 8.45 KB
-MODIFIED: 2026-01-02 07:10:32
+MODIFIED: 2026-01-02 08:10:32
 ================================================================================
 
 // GeminiClient/GeminiApiClient.cs
@@ -2549,7 +2550,7 @@ public class GeminiApiClient : IGeminiApiClient
 ================================================================================
 FILE: GeminiClient/GeminiApiException.cs
 SIZE: .28 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ﻿// GeminiClient/GeminiApiException.cs
@@ -2565,7 +2566,7 @@ public class GeminiApiException : Exception
 ================================================================================
 FILE: GeminiClient/GeminiApiOptions.cs
 SIZE: 1.71 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ﻿// GeminiClient/GeminiApiOptions.cs
@@ -2627,7 +2628,7 @@ public class GeminiApiOptions
 ================================================================================
 FILE: GeminiClient/GeminiApiOptionsValidator.cs
 SIZE: 1.14 KB
-MODIFIED: 2025-12-24 13:20:31
+MODIFIED: 2025-12-24 14:20:31
 ================================================================================
 
 // GeminiClient/GeminiApiOptionsValidator.cs (New file for manual validation)
@@ -2672,7 +2673,7 @@ public class GeminiApiOptionsValidator : IValidateOptions<GeminiApiOptions>
 ================================================================================
 FILE: GeminiClient/GeminiClient.csproj
 SIZE: .93 KB
-MODIFIED: 2025-12-24 14:22:06
+MODIFIED: 2025-12-24 15:22:06
 ================================================================================
 
 ﻿<!-- GeminiClient/GeminiClient.csproj -->
@@ -2705,7 +2706,7 @@ MODIFIED: 2025-12-24 14:22:06
 ================================================================================
 FILE: GeminiClient/IEnvironmentContextService.cs
 SIZE: .35 KB
-MODIFIED: 2026-01-02 07:09:47
+MODIFIED: 2026-01-02 08:09:47
 ================================================================================
 
 // GeminiClient/IEnvironmentContextService.cs
@@ -2726,7 +2727,7 @@ public interface IEnvironmentContextService
 ================================================================================
 FILE: GeminiClient/IGeminiApiClient.cs
 SIZE: 1.51 KB
-MODIFIED: 2025-12-24 15:10:43
+MODIFIED: 2025-12-24 16:10:43
 ================================================================================
 
 ﻿// GeminiClient/IGeminiApiClient.cs
@@ -2767,7 +2768,7 @@ public interface IGeminiApiClient
 ================================================================================
 FILE: GeminiClient/IModelService.cs
 SIZE: .99 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ﻿// GeminiClient/IModelService.cs
@@ -2806,7 +2807,7 @@ public interface IModelService
 ================================================================================
 FILE: GeminiClient/JsonSerializerContext.cs
 SIZE: 1.08 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 // GeminiClient/JsonSerializerContext.cs
@@ -2845,7 +2846,7 @@ internal partial class GeminiJsonContext : JsonSerializerContext
 ================================================================================
 FILE: GeminiClient/ModelService.cs
 SIZE: 7.56 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ﻿// GeminiClient/ModelService.cs (Updated for trim-safe serialization)
@@ -3022,7 +3023,7 @@ public class ModelService(
 ================================================================================
 FILE: GeminiClient/Models/GeminiModel.cs
 SIZE: 1.36 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ﻿// GeminiClient/Models/GeminiModel.cs
@@ -3083,7 +3084,7 @@ public class ModelsListResponse
 ================================================================================
 FILE: GeminiClient/Models/GeminiRequest.cs
 SIZE: .59 KB
-MODIFIED: 2026-01-02 07:09:47
+MODIFIED: 2026-01-02 08:09:47
 ================================================================================
 
 // GeminiClient/Models/GeminiRequest.cs
@@ -3119,7 +3120,7 @@ public class Part
 ================================================================================
 FILE: GeminiClient/Models/GeminiResponse.cs
 SIZE: 1.10 KB
-MODIFIED: 2025-12-24 13:20:31
+MODIFIED: 2025-12-24 14:20:31
 ================================================================================
 
 ﻿// GeminiClient/Models/GeminiResponse.cs
@@ -3169,7 +3170,7 @@ public class SafetyRating
 ================================================================================
 FILE: GeminiClient/Models/ModelSelectionCriteria.cs
 SIZE: 1.10 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ﻿// GeminiClient/Models/ModelSelectionCriteria.cs
@@ -3218,7 +3219,7 @@ public enum ModelCapability
 ================================================================================
 FILE: GeminiClient/ServiceCollectionExtensions.cs
 SIZE: 3.09 KB
-MODIFIED: 2026-01-02 07:09:47
+MODIFIED: 2026-01-02 08:09:47
 ================================================================================
 
 // GeminiClient/ServiceCollectionExtensions.cs
@@ -3298,7 +3299,7 @@ public static class ServiceCollectionExtensions
 ================================================================================
 FILE: GeminiMockApi/appsettings.Development.json
 SIZE: .11 KB
-MODIFIED: 2026-01-03 16:34:18
+MODIFIED: 2026-01-03 17:34:18
 ================================================================================
 
 {
@@ -3314,7 +3315,7 @@ MODIFIED: 2026-01-03 16:34:18
 ================================================================================
 FILE: GeminiMockApi/appsettings.json
 SIZE: .13 KB
-MODIFIED: 2026-01-03 16:34:18
+MODIFIED: 2026-01-03 17:34:18
 ================================================================================
 
 {
@@ -3331,7 +3332,7 @@ MODIFIED: 2026-01-03 16:34:18
 ================================================================================
 FILE: GeminiMockApi/Controllers/GeminiController.cs
 SIZE: 4.14 KB
-MODIFIED: 2026-01-03 17:21:55
+MODIFIED: 2026-01-03 18:21:55
 ================================================================================
 
 using System.Text.Json;
@@ -3457,7 +3458,7 @@ public class GeminiController : ControllerBase
 ================================================================================
 FILE: GeminiMockApi/GeminiMockApi.csproj
 SIZE: .29 KB
-MODIFIED: 2026-01-03 16:35:03
+MODIFIED: 2026-01-03 17:35:03
 ================================================================================
 
 <Project Sdk="Microsoft.NET.Sdk.Web">
@@ -3478,7 +3479,7 @@ MODIFIED: 2026-01-03 16:35:03
 ================================================================================
 FILE: GeminiMockApi/Models/GeminiDTOs.cs
 SIZE: .58 KB
-MODIFIED: 2026-01-03 17:21:55
+MODIFIED: 2026-01-03 18:21:55
 ================================================================================
 
 namespace GeminiMockApi.Models;
@@ -3505,7 +3506,7 @@ public record Part(string text);
 ================================================================================
 FILE: GeminiMockApi/Program.cs
 SIZE: .71 KB
-MODIFIED: 2026-01-03 16:38:36
+MODIFIED: 2026-01-03 17:38:36
 ================================================================================
 
 var builder = WebApplication.CreateBuilder(args);
@@ -3533,7 +3534,7 @@ app.Run("http://localhost:5000");
 ================================================================================
 FILE: GeminiMockApi/Properties/launchSettings.json
 SIZE: .33 KB
-MODIFIED: 2026-01-03 16:34:18
+MODIFIED: 2026-01-03 17:34:18
 ================================================================================
 
 ﻿{
@@ -3555,7 +3556,7 @@ MODIFIED: 2026-01-03 16:34:18
 ================================================================================
 FILE: .gitattributes
 SIZE: 2.45 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ###############################################################################
@@ -3626,7 +3627,7 @@ MODIFIED: 2025-12-24 13:18:10
 ================================================================================
 FILE: .github/workflows/ci.yml
 SIZE: 4.15 KB
-MODIFIED: 2025-12-24 13:29:49
+MODIFIED: 2025-12-24 14:29:49
 ================================================================================
 
 # .github/workflows/ci.yml
@@ -3790,7 +3791,7 @@ jobs:
 ================================================================================
 FILE: .github/workflows/continuous-release.yml
 SIZE: 2.80 KB
-MODIFIED: 2025-12-24 13:46:15
+MODIFIED: 2025-12-24 14:46:15
 ================================================================================
 
 name: Continuous Release
@@ -3892,7 +3893,7 @@ jobs:
 ================================================================================
 FILE: .gitignore
 SIZE: 6.09 KB
-MODIFIED: 2025-12-24 13:18:10
+MODIFIED: 2025-12-24 14:18:10
 ================================================================================
 
 ## Ignore Visual Studio temporary files, build results, and
@@ -4265,7 +4266,7 @@ launchSettings.json
 ================================================================================
 FILE: install-gemini-client.sh
 SIZE: 5.59 KB
-MODIFIED: 2025-12-24 13:52:35
+MODIFIED: 2025-12-24 14:52:35
 ================================================================================
 
 #!/bin/bash
@@ -4450,7 +4451,7 @@ echo "Run the client by typing: $SYMLINK_NAME"
 ================================================================================
 FILE: LearningByDoing.sln
 SIZE: 3.98 KB
-MODIFIED: 2026-01-03 16:37:57
+MODIFIED: 2026-01-03 17:37:57
 ================================================================================
 
 ﻿
@@ -4523,7 +4524,7 @@ EndGlobal
 ================================================================================
 FILE: README.md
 SIZE: 5.06 KB
-MODIFIED: 2026-01-02 07:22:07
+MODIFIED: 2026-01-02 08:22:07
 ================================================================================
 
 # 🤖 Gemini Client Console
@@ -4689,7 +4690,7 @@ Made with ❤️ using .NET 10, Google Gemini AI, and Server-Sent Events
 ================================================================================
 FILE: upgrade-grounding.sh
 SIZE: 16.59 KB
-MODIFIED: 2026-01-02 07:09:16
+MODIFIED: 2026-01-02 08:09:16
 ================================================================================
 
 #!/bin/bash
@@ -5136,7 +5137,7 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Sat Jan  3 05:23:03 PM CST 2026
+EXPORT COMPLETED: Fri Mar 20 01:26:45 AM EDT 2026
 Total Files Found: 44
 Files Exported: 44
 Files Skipped: 0 (binary or large files)
