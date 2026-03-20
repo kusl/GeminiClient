@@ -386,4 +386,90 @@ The given project `GeminiMockApi` has no updates given the current sources.
 real	0m1.513s
 user	0m1.505s
 sys	0m0.266s
+kushal@fedora:~/src/dotnet/GeminiClient$ gemini-client 
+info: GeminiClientConsole.AppRunner[0]
+      Application starting...
+📝 Conversation log: /home/kushal/.local/share/gemini-client/logs/conversation_2026-03-20_01-35-27.txt
+
+🤖 Available Gemini Models:                                                                                                                                                                                        
+═══════════════════════════
+  [1] gemini-flash-lite-latest - Latest release of Gemini Flash-Lite
+  [2] gemini-flash-latest - Latest release of Gemini Flash
+  [3] gemini-3.1-flash-lite-preview - Gemini 3.1 Flash Lite Preview
+  [4] gemini-3.1-flash-image-preview - Gemini 3.1 Flash Image Preview.
+  [5] gemini-3-flash-preview - Gemini 3 Flash Preview
+  [6] gemini-2.5-flash-preview-tts - Gemini 2.5 Flash Preview TTS
+  [7] gemini-2.5-flash-lite-preview-09-2025 - Preview release (Septempber 25th, 2025) of Gemini 2.5 Fla...
+  [8] gemini-2.5-flash-lite - Stable version of Gemini 2.5 Flash-Lite, released in July...
+  [9] gemini-2.5-flash-image - Gemini 2.5 Flash Preview Image
+  [10] gemini-2.5-flash - Stable version of Gemini 2.5 Flash, our mid-size multimod...
+  [11] gemini-2.0-flash-lite-001 - Stable version of Gemini 2.0 Flash-Lite
+  [12] gemini-2.0-flash-lite - Gemini 2.0 Flash-Lite
+  [13] gemini-2.0-flash-001 - Stable version of Gemini 2.0 Flash, our fast and versatil...
+  [14] gemini-2.0-flash - Gemini 2.0 Flash
+  [15] nano-banana-pro-preview - Gemini 3 Pro Image Preview
+  [16] gemini-pro-latest - Latest release of Gemini Pro
+  [17] gemini-3.1-pro-preview-customtools - Gemini 3.1 Pro Preview optimized for custom tool usage
+  [18] gemini-3.1-pro-preview - Gemini 3.1 Pro Preview
+  [19] gemini-3-pro-preview - Gemini 3 Pro Preview
+  [20] gemini-3-pro-image-preview - Gemini 3 Pro Image Preview
+  [21] gemini-2.5-pro-preview-tts - Gemini 2.5 Pro Preview TTS
+  [22] gemini-2.5-pro - Stable release (June 17th, 2025) of Gemini 2.5 Pro
+  [23] deep-research-pro-preview-12-2025 - Preview release (December 12th, 2025) of Deep Research Pro
+  [24] gemma-3n-e4b-it - Gemma 3n E4B
+  [25] gemma-3n-e2b-it - Gemma 3n E2B
+  [26] gemma-3-4b-it - Gemma 3 4B
+  [27] gemma-3-27b-it - Gemma 3 27B
+  [28] gemma-3-1b-it - Gemma 3 1B
+  [29] gemma-3-12b-it - Gemma 3 12B
+  [30] gemini-robotics-er-1.5-preview - Gemini Robotics-ER 1.5 Preview
+  [31] gemini-2.5-computer-use-preview-10-2025 - Gemini 2.5 Computer Use Preview 10-2025
+
+Select a model (1-31) or press Enter for default [gemini-flash-lite-latest]: 
+✓ Selected: gemini-flash-lite-latest (default)
+🎉 Ready to go!
+info: GeminiClientConsole.ConsoleModelSelector[0]
+      Model selected: gemini-flash-lite-latest (default)
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+> what time is it now in kathmandu? 
+
+╭─── Streaming Response ───╮
+⚡ First response: 12505ms
+
+The current local time for you is **2026-03-20 01:35:55** in the America/New\_York timezone (UTC-05:00).
+
+Kathmandu, Nepal uses Nepal Standard Time (NPT), which is UTC+05:45.
+
+To find the time in Kathmandu, we add 10 hours and 45 minutes to your local time (UTC-05:00):
+
+01:35:55 (Your Local Time) + 10 hours 45 minutes = **12:20:55 PM on 2026-03-20** in Kathmandu.
+╰────────────────╯
+📊 Streaming Performance Metrics:
+   └─ Total Time: 12.84s
+   └─ Words: 55 | Characters: 365
+   └─ Est. Tokens: ~91 | Speed: 7.1 tokens/s [░░░░░░░░░░] 🐌
+   └─ Mode: 🌊 Streaming (real-time)
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+   (Context: 1 turns)
+> exit
+
+╔═══ Session Statistics ═══╗
+  📊 Total Requests: 1
+  ⏱  Average Response: 12.84s
+  🚀 Fastest: 12.84s
+  🐌 Slowest: 12.84s
+  📝 Total Output: 365 characters
+  ⏰ Session Duration: 1m 28s
+  🌊 Streaming: Enabled
+  💭 Context Depth: 1 turns
+
+  🤖 Models Used:
+     └─ gemini-flash-lite-latest: 1 requests (avg 12.84s)
+╚════════════════════════╝
+
+Goodbye! 👋
+info: GeminiClientConsole.AppRunner[0]
+      Application finished
 kushal@fedora:~/src/dotnet/GeminiClient$ 
