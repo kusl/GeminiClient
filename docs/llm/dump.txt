@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Wed May 20 12:38:25 PM EDT 2026
+Generated: Wed May 20 12:42:54 PM EDT 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -13,7 +13,8 @@ DIRECTORY STRUCTURE:
 │   │   ├── output
 │   │   │   ├── 00001.txt
 │   │   │   ├── 00002.txt
-│   │   │   └── 00003.txt
+│   │   │   ├── 00003.txt
+│   │   │   └── 00004.txt
 │   │   ├── collabskus_dump.txt
 │   │   ├── commands.txt
 │   │   ├── dump.txt
@@ -584,14 +585,14 @@ MODIFIED: 2025-12-24 14:29:56
 ================================================================================
 FILE: Directory.Packages.props
 SIZE: 1.72 KB
-MODIFIED: 2026-03-20 01:33:36
+MODIFIED: 2026-05-20 12:41:29
 ================================================================================
 
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <MicrosoftExtensionsVersion>10.0.5</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion>10.0.8</MicrosoftExtensionsVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="$(MicrosoftExtensionsVersion)" />
@@ -5138,7 +5139,7 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Wed May 20 12:38:26 PM EDT 2026
+EXPORT COMPLETED: Wed May 20 12:42:54 PM EDT 2026
 Total Files Found: 44
 Files Exported: 44
 Files Skipped: 0 (binary or large files)
