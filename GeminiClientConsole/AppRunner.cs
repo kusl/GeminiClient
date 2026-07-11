@@ -70,7 +70,7 @@ public sealed class AppRunner : IDisposable
                     continue;
                 }
 
-                (bool isCommand, bool shouldExit) = await HandleCommandAsync(userInput);
+                (bool isCommand, bool shouldExit) = await HandleCommandAsync(input);
                 if (isCommand)
                 {
                     if (shouldExit)
@@ -146,7 +146,7 @@ public sealed class AppRunner : IDisposable
     private async Task<(bool Handled, bool Exit)> HandleCommandAsync(string input)
     {
         // Default fallback values
-        bool exit = false; 
+        bool exit = false;
 
         switch (input.ToLowerInvariant())
         {

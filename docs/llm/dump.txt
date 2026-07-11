@@ -7,7 +7,7 @@
 
 DUMP METADATA
 ═════════════════════════════════════════════════════════════════════════════════
-  Generated at   : 2026-07-11T05:07:44-04:00
+  Generated at   : 2026-07-11T05:27:04-04:00
   Generator      : export.sh
   Host           : fedora
   User           : kushal
@@ -17,10 +17,10 @@ REPOSITORY METADATA
 ═════════════════════════════════════════════════════════════════════════════════
   Repository root: /home/kushal/src/dotnet/GeminiClient
   Branch         : main
-  Commit (full)  : b4d80bcc535e833091f26f35ed302b160cdc48f8
-  Commit (short) : b4d80bc
-  Commit date    : 2026-07-11 05:07:20 -0400
-  Commit message : run dump
+  Commit (full)  : 3dede2486a7b4cc91db5d84ccf5f542b71c7fe1f
+  Commit (short) : 3dede24
+  Commit date    : 2026-07-11 05:26:44 -0400
+  Commit message : clean up with gemini
   Remote origin  : git@github.com:kusl/GeminiClient.git
   Files included : 69
   Excluded path  : docs/llm/
@@ -28,7 +28,7 @@ REPOSITORY METADATA
 
 GIT WORKING TREE STATUS (first 20 lines)
 ═════════════════════════════════════════════════════════════════════════════════
-  (clean — no uncommitted changes)
+ M GeminiClientConsole/AppRunner.cs
 
 ################################################################################
 # FILE: export.sh  [THIS SCRIPT — included for full context]
@@ -2429,15 +2429,15 @@ mv -f "$TMP_FILE" "$OUTPUT_FILE"
   File name:             AppRunner.cs
   Relative path:         GeminiClientConsole/AppRunner.cs
   Absolute path:         /home/kushal/src/dotnet/GeminiClient/GeminiClientConsole/AppRunner.cs
-  Size:                  27.0 KiB (27726 bytes)
-  Last modified:         2026-07-11 03:26:10.000000000 -0400
+  Size:                  27.3 KiB (27982 bytes)
+  Last modified:         2026-07-11 05:27:04.385075145 -0400
   Permissions:           -rw-r--r--
   Owner:                 kushal:kushal
   Inode:                 20586380
   Hard links:            1
-  MIME type:             text/x-Algol68
-  SHA-256:               eea0a9242552b0c038cc00cbe38c671e3ccedc2c125263367062990fe99238db
-  Last git commit:       3b34a4d 2026-07-11 05:04:43 -0400 add claude response
+  MIME type:             text/plain
+  SHA-256:               1a581419a7ae70527749b180273f4846e97d5fa7373175070e8d795f363af6d4
+  Last git commit:       3dede24 2026-07-11 05:26:44 -0400 clean up with gemini
 
 --- CONTENT ---
 // GeminiClientConsole/AppRunner.cs
@@ -2512,9 +2512,10 @@ public sealed class AppRunner : IDisposable
                     continue;
                 }
 
-                if (await HandleCommandAsync(input, out bool exit))
+                (bool isCommand, bool shouldExit) = await HandleCommandAsync(userInput);
+                if (isCommand)
                 {
-                    if (exit)
+                    if (shouldExit)
                     {
                         break;
                     }
@@ -2584,53 +2585,56 @@ public sealed class AppRunner : IDisposable
 
     // ---- Commands -----------------------------------------------------------------------------
 
-    private async Task<bool> HandleCommandAsync(string input, out bool exit)
+    private async Task<(bool Handled, bool Exit)> HandleCommandAsync(string input)
     {
-        exit = false;
+        // Default fallback values
+        bool exit = false;
+
         switch (input.ToLowerInvariant())
         {
             case "exit":
             case "quit":
                 _conversationLogger.LogCommand("exit");
                 exit = true;
-                return true;
+                return (true, exit);
 
             case "reset":
                 _conversationLogger.LogCommand("reset");
                 _chatHistory.Clear();
                 ConsoleSafe.WriteLineColored("✨ Conversation context cleared. Starting fresh.", ConsoleColor.Green);
-                return true;
+                return (true, exit);
 
             case "model":
                 _conversationLogger.LogCommand("model");
+                // The await happens safely here without messing with stack references
                 _selectedModel = await _modelSelector.SelectModelInteractivelyAsync(_appCts.Token);
                 ConsoleSafe.WriteLineColored($"✓ Using model: {_selectedModel}", ConsoleColor.Green);
-                return true;
+                return (true, exit);
 
             case "stats":
                 _conversationLogger.LogCommand("stats");
                 DisplaySessionSummary();
-                return true;
+                return (true, exit);
 
             case "log":
                 _conversationLogger.LogCommand("log");
                 OpenLogLocation();
-                return true;
+                return (true, exit);
 
             case "stream":
                 _streamingEnabled = !_streamingEnabled;
                 _conversationLogger.LogCommand($"stream ({(_streamingEnabled ? "on" : "off")})");
                 ConsoleSafe.WriteLineColored(
                     $"✓ Streaming {(_streamingEnabled ? "enabled" : "disabled")}.", ConsoleColor.Green);
-                return true;
+                return (true, exit);
 
             case "help":
             case "?":
                 PrintHelp();
-                return true;
+                return (true, exit);
 
             default:
-                return false;
+                return (false, exit);
         }
     }
 
@@ -9120,9 +9124,9 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 # DUMP SUMMARY
 ################################################################################
   Files dumped   : 69
-  Total size     : 262.9 KiB (269257 bytes)
+  Total size     : 263.1 KiB (269513 bytes)
   Output file    : /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
-  Completed at   : 2026-07-11T05:07:46-04:00
+  Completed at   : 2026-07-11T05:27:07-04:00
 ################################################################################
 # END OF DUMP
 ################################################################################
