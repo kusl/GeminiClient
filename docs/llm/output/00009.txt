@@ -1,0 +1,286 @@
+kushal@fedora:~/src/mycoq/hellocoq$ gemini-client 
+info: GeminiClientConsole.AppRunner[0]
+      Application starting...
+📝 Conversation log: /home/kushal/.local/share/gemini-client/logs/conversation_2026-07-11_02-31-55.txt
+
+🤖 Available Gemini Models:                                                                                                                                                                                        
+═══════════════════════════
+  [1] gemini-omni-flash-preview - Gemini Omni Flash Preview
+  [2] gemini-flash-lite-latest - Latest release of Gemini Flash-Lite
+  [3] gemini-flash-latest - Latest release of Gemini Flash
+  [4] gemini-3.5-flash - Gemini 3.5 Flash
+  [5] gemini-3.1-flash-tts-preview - Gemini 3.1 Flash TTS Preview
+  [6] gemini-3.1-flash-lite-preview - Gemini 3.1 Flash Lite Preview
+  [7] gemini-3.1-flash-lite-image - Gemini 3.1 Flash Lite Image.
+  [8] gemini-3.1-flash-lite - Gemini 3.1 Flash Lite
+  [9] gemini-3.1-flash-image-preview - Gemini 3.1 Flash Image Preview.
+  [10] gemini-3.1-flash-image - Gemini 3.1 Flash Image.
+  [11] gemini-3-flash-preview - Gemini 3 Flash Preview
+  [12] gemini-2.5-flash-preview-tts - Gemini 2.5 Flash Preview TTS
+  [13] gemini-2.5-flash-lite - Stable version of Gemini 2.5 Flash-Lite, released in July...
+  [14] gemini-2.5-flash-image - Gemini 2.5 Flash Preview Image
+  [15] gemini-2.5-flash - Stable version of Gemini 2.5 Flash, our mid-size multimod...
+  [16] gemini-2.0-flash-lite-001 - Stable version of Gemini 2.0 Flash-Lite
+  [17] gemini-2.0-flash-lite - Gemini 2.0 Flash-Lite
+  [18] gemini-2.0-flash-001 - Stable version of Gemini 2.0 Flash, our fast and versatil...
+  [19] gemini-2.0-flash - Gemini 2.0 Flash
+  [20] nano-banana-pro-preview - Gemini 3 Pro Image Preview
+  [21] lyria-3-pro-preview - Lyria 3 Pro Preview
+  [22] gemini-pro-latest - Latest release of Gemini Pro
+  [23] gemini-3.1-pro-preview-customtools - Gemini 3.1 Pro Preview optimized for custom tool usage
+  [24] gemini-3.1-pro-preview - Gemini 3.1 Pro Preview
+  [25] gemini-3-pro-preview - Gemini 3 Pro Preview
+  [26] gemini-3-pro-image-preview - Gemini 3 Pro Image Preview
+  [27] gemini-3-pro-image - Gemini 3 Pro Image
+  [28] gemini-2.5-pro-preview-tts - Gemini 2.5 Pro Preview TTS
+  [29] gemini-2.5-pro - Stable release (June 17th, 2025) of Gemini 2.5 Pro
+  [30] deep-research-pro-preview-12-2025 - Preview release (December 12th, 2025) of Deep Research Pro
+  [31] lyria-3-clip-preview - Lyria 3 30s model Preview
+  [32] gemma-4-31b-it - Gemma 4 31B IT
+  [33] gemma-4-26b-a4b-it - Gemma 4 26B A4B IT
+  [34] gemini-robotics-er-1.6-preview - Gemini Robotics-ER 1.6 Preview
+  [35] gemini-robotics-er-1.5-preview - Gemini Robotics-ER 1.5 Preview
+  [36] gemini-2.5-computer-use-preview-10-2025 - Gemini 2.5 Computer Use Preview 10-2025
+  [37] deep-research-preview-04-2026 - Preview release (April 21th, 2026) of Deep Research
+  [38] deep-research-max-preview-04-2026 - Preview release (April 21st, 2026) of Deep Research Max
+  [39] antigravity-preview-05-2026 - Preview release of Antigravity Agent (05-2026)
+
+Select a model (1-39) or press Enter for default [gemini-omni-flash-preview]: 
+✓ Selected: gemini-omni-flash-preview (default)
+🎉 Ready to go!
+info: GeminiClientConsole.ConsoleModelSelector[0]
+      Model selected: gemini-omni-flash-preview (default)
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+> what time is it in kathmandu? 
+
+╭─── Streaming Response ───╮
+fail: GeminiClient.GeminiApiClient[0]
+      Gemini API streaming request failed with status code TooManyRequests. Response: {
+        "error": {
+          "code": 429,
+          "message": "You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-omni-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-omni-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-omni-flash\nPlease retry in 42.405777198s.",
+          "status": "RESOURCE_EXHAUSTED",
+          "details": [
+            {
+              "@type": "type.googleapis.com/google.rpc.Help",
+              "links": [
+                {
+                  "description": "Learn more about Gemini API quotas",
+                  "url": "https://ai.google.dev/gemini-api/docs/rate-limits"
+                }
+              ]
+            },
+            {
+              "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+              "violations": [
+                {
+                  "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                  "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                  "quotaDimensions": {
+                    "location": "global",
+                    "model": "gemini-omni-flash"
+                  }
+                },
+                {
+                  "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                  "quotaId": "GenerateRequestsPerMinutePerProjectPerModel-FreeTier",
+                  "quotaDimensions": {
+                    "location": "global",
+                    "model": "gemini-omni-flash"
+                  }
+                },
+                {
+                  "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count",
+                  "quotaId": "GenerateContentInputTokensPerModelPerMinute-FreeTier",
+                  "quotaDimensions": {
+                    "location": "global",
+                    "model": "gemini-omni-flash"
+                  }
+                }
+              ]
+            },
+            {
+              "@type": "type.googleapis.com/google.rpc.RetryInfo",
+              "retryDelay": "42s"
+            }
+          ]
+        }
+      }
+      
+fail: GeminiClient.GeminiApiClient[0]
+      Error initializing stream from Gemini API.
+      System.Net.Http.HttpRequestException: Response status code does not indicate success: 429 (Too Many Requests).
+         at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode()
+         at GeminiClient.GeminiApiClient.StreamGenerateContentAsync(String modelName, List`1 history, CancellationToken cancellationToken)+MoveNext()
+
+❌ Network Error: Response status code does not indicate success: 429 (Too Many Requests).
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+> fail: GeminiClientConsole.AppRunner[0]
+      HTTP error during content generation
+      System.Net.Http.HttpRequestException: Response status code does not indicate success: 429 (Too Many Requests).
+         at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode()
+         at GeminiClient.GeminiApiClient.StreamGenerateContentAsync(String modelName, List`1 history, CancellationToken cancellationToken)+MoveNext()
+         at GeminiClient.GeminiApiClient.StreamGenerateContentAsync(String modelName, List`1 history, CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()
+         at GeminiClientConsole.AppRunner.ProcessPromptStreamingAsync(String prompt)
+         at GeminiClientConsole.AppRunner.ProcessPromptStreamingAsync(String prompt)
+
+⚠ Prompt cannot be empty
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+> model
+🤖 Available Gemini Models:                                                                                                                                                                                        
+═══════════════════════════
+  [1] gemini-omni-flash-preview - Gemini Omni Flash Preview
+  [2] gemini-flash-lite-latest - Latest release of Gemini Flash-Lite
+  [3] gemini-flash-latest - Latest release of Gemini Flash
+  [4] gemini-3.5-flash - Gemini 3.5 Flash
+  [5] gemini-3.1-flash-tts-preview - Gemini 3.1 Flash TTS Preview
+  [6] gemini-3.1-flash-lite-preview - Gemini 3.1 Flash Lite Preview
+  [7] gemini-3.1-flash-lite-image - Gemini 3.1 Flash Lite Image.
+  [8] gemini-3.1-flash-lite - Gemini 3.1 Flash Lite
+  [9] gemini-3.1-flash-image-preview - Gemini 3.1 Flash Image Preview.
+  [10] gemini-3.1-flash-image - Gemini 3.1 Flash Image.
+  [11] gemini-3-flash-preview - Gemini 3 Flash Preview
+  [12] gemini-2.5-flash-preview-tts - Gemini 2.5 Flash Preview TTS
+  [13] gemini-2.5-flash-lite - Stable version of Gemini 2.5 Flash-Lite, released in July...
+  [14] gemini-2.5-flash-image - Gemini 2.5 Flash Preview Image
+  [15] gemini-2.5-flash - Stable version of Gemini 2.5 Flash, our mid-size multimod...
+  [16] gemini-2.0-flash-lite-001 - Stable version of Gemini 2.0 Flash-Lite
+  [17] gemini-2.0-flash-lite - Gemini 2.0 Flash-Lite
+  [18] gemini-2.0-flash-001 - Stable version of Gemini 2.0 Flash, our fast and versatil...
+  [19] gemini-2.0-flash - Gemini 2.0 Flash
+  [20] nano-banana-pro-preview - Gemini 3 Pro Image Preview
+  [21] lyria-3-pro-preview - Lyria 3 Pro Preview
+  [22] gemini-pro-latest - Latest release of Gemini Pro
+  [23] gemini-3.1-pro-preview-customtools - Gemini 3.1 Pro Preview optimized for custom tool usage
+  [24] gemini-3.1-pro-preview - Gemini 3.1 Pro Preview
+  [25] gemini-3-pro-preview - Gemini 3 Pro Preview
+  [26] gemini-3-pro-image-preview - Gemini 3 Pro Image Preview
+  [27] gemini-3-pro-image - Gemini 3 Pro Image
+  [28] gemini-2.5-pro-preview-tts - Gemini 2.5 Pro Preview TTS
+  [29] gemini-2.5-pro - Stable release (June 17th, 2025) of Gemini 2.5 Pro
+  [30] deep-research-pro-preview-12-2025 - Preview release (December 12th, 2025) of Deep Research Pro
+  [31] lyria-3-clip-preview - Lyria 3 30s model Preview
+  [32] gemma-4-31b-it - Gemma 4 31B IT
+  [33] gemma-4-26b-a4b-it - Gemma 4 26B A4B IT
+  [34] gemini-robotics-er-1.6-preview - Gemini Robotics-ER 1.6 Preview
+  [35] gemini-robotics-er-1.5-preview - Gemini Robotics-ER 1.5 Preview
+  [36] gemini-2.5-computer-use-preview-10-2025 - Gemini 2.5 Computer Use Preview 10-2025
+  [37] deep-research-preview-04-2026 - Preview release (April 21th, 2026) of Deep Research
+  [38] deep-research-max-preview-04-2026 - Preview release (April 21st, 2026) of Deep Research Max
+  [39] antigravity-preview-05-2026 - Preview release of Antigravity Agent (05-2026)
+
+Select a model (1-39) or press Enter for default [gemini-omni-flash-preview]: 3
+✓ Selected: gemini-flash-latest
+🎉 Ready to go!
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+info: GeminiClientConsole.ConsoleModelSelector[0]
+      Model selected: gemini-flash-latest
+> what time is it in kathmandu?
+
+╭─── Streaming Response ───╮
+⚡ First response: 8915ms
+
+Based on the current UTC time, the current time in Kathmandu, Nepal (which is UTC+5:45) is **12:17 PM** on Saturday, July 11, 2026.
+╰────────────────╯
+📊 Streaming Performance Metrics:
+   └─ Total Time: 9.07s
+   └─ Words: 23 | Characters: 131
+   └─ Est. Tokens: ~32 | Speed: 3.5 tokens/s [░░░░░░░░░░] 🐌
+   └─ Mode: 🌊 Streaming (real-time)
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+   (Context: 1 turns)
+> what do you know about my computer? 
+
+╭─── Streaming Response ───╮
+⚡ First response: 6358ms
+
+Based on the system details provided, here is what I know about your computer:
+
+*   **Operating System:** Linux (OS Version: Unix 7.1.3.100)
+*   **Machine Name:** `fedora` (which typically indicates you are running a Fedora-based Linux distribution)
+*   **User Name:** `kushal`
+*   **Locale:** English (United States) (`en-US`)
+*   **System Time/Timezone:** Configured to Eastern Time (New York, UTC-5), currently showing the local time as 2:33 AM on Saturday, July 11, 2026.
+╰────────────────╯
+📊 Streaming Performance Metrics:
+   └─ Total Time: 6.72s
+   └─ Words: 64 | Characters: 475
+   └─ Est. Tokens: ~118 | Speed: 17.6 tokens/s [█░░░░░░░░░] 🚶
+   └─ Mode: 🌊 Streaming (real-time)
+   └─ Session Avg: 7.89s (🟢 faster)
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+   (Context: 2 turns)
+>  a dog, a cat, and a mouse need to cross a river on a raft. The Dog will fight the Cat if they are left alone.  The Cat will eat the Mouse if they are left alone.  The Dog and the Mouse are totally fine together.
+
+╭─── Streaming Response ───╮
+fail: GeminiClient.GeminiApiClient[0]
+      Gemini API streaming request failed with status code ServiceUnavailable. Response: {
+        "error": {
+          "code": 503,
+          "message": "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.",
+          "status": "UNAVAILABLE"
+        }
+      }
+      
+fail: GeminiClient.GeminiApiClient[0]
+      Error initializing stream from Gemini API.
+      System.Net.Http.HttpRequestException: Response status code does not indicate success: 503 (Service Unavailable).
+         at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode()
+         at GeminiClient.GeminiApiClient.StreamGenerateContentAsync(String modelName, List`1 history, CancellationToken cancellationToken)+MoveNext()
+
+❌ Network Error: Response status code does not indicate success: 503 (Service Unavailable).
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+   (Context: 2 turns)
+> fail: GeminiClientConsole.AppRunner[0]
+      HTTP error during content generation
+      System.Net.Http.HttpRequestException: Response status code does not indicate success: 503 (Service Unavailable).
+         at System.Net.Http.HttpResponseMessage.EnsureSuccessStatusCode()
+         at GeminiClient.GeminiApiClient.StreamGenerateContentAsync(String modelName, List`1 history, CancellationToken cancellationToken)+MoveNext()
+         at GeminiClient.GeminiApiClient.StreamGenerateContentAsync(String modelName, List`1 history, CancellationToken cancellationToken)+System.Threading.Tasks.Sources.IValueTaskSource<System.Boolean>.GetResult()
+         at GeminiClientConsole.AppRunner.ProcessPromptStreamingAsync(String prompt)
+         at GeminiClientConsole.AppRunner.ProcessPromptStreamingAsync(String prompt)
+stats
+
+╔═══ Session Statistics ═══╗
+  📊 Total Requests: 2
+  ⏱  Average Response: 7.89s
+  🚀 Fastest: 6.72s
+  🐌 Slowest: 9.07s
+  📝 Total Output: 606 characters
+  ⏰ Session Duration: 6m 00s
+  🌊 Streaming: Enabled
+  💭 Context Depth: 2 turns
+
+  🤖 Models Used:
+     └─ gemini-flash-latest: 2 requests (avg 7.89s)
+╚════════════════════════╝
+
+📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [ON]):
+   (Context: 2 turns)
+> exit
+
+╔═══ Session Statistics ═══╗
+  📊 Total Requests: 2
+  ⏱  Average Response: 7.89s
+  🚀 Fastest: 6.72s
+  🐌 Slowest: 9.07s
+  📝 Total Output: 606 characters
+  ⏰ Session Duration: 6m 11s
+  🌊 Streaming: Enabled
+  💭 Context Depth: 2 turns
+
+  🤖 Models Used:
+     └─ gemini-flash-latest: 2 requests (avg 7.89s)
+╚════════════════════════╝
+
+Goodbye! 👋
+info: GeminiClientConsole.AppRunner[0]
+      Application finished
+kushal@fedora:~/src/mycoq/hellocoq$ 

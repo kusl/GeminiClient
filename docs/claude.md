@@ -698,3 +698,62 @@ Looking at the packages, they're all `Microsoft.Extensions.*` and `Microsoft.Asp
 
 
 
+26
+80
+100
+
+There are multiple issues with the application. 
+Firstly, please review the full dump.txt 
+fix all the defects you find in the application 
+not just compilation and syntax errors 
+but any logical errors 
+or best engineering principles violation 
+also go through all the code 
+and write down all the assumptions we made 
+into a set of 
+archtectural decision records
+```https://adr.github.io/
+Motivation and Definitions
+
+An Architectural Decision (AD) is a justified design choice that addresses a functional or non-functional requirement that is architecturally significant. An Architecturally Significant Requirement (ASR) is a requirement that has a measurable effect on the architecture and quality of a software and/or hardware system. An Architectural Decision Record (ADR) captures a single AD and its rationale; Put it simply, ADR can help you understand the reasons for a chosen architectural decision, along with its trade-offs and consequences. The collection of ADRs created and maintained in a project constitute its decision log. All these are within the topic of Architectural Knowledge Management (AKM), but ADR usage can be extended to design and other decisions (“any decision record”).
+
+The aim of the GitHub adr organization is to:
+
+    Motivate the need for and benefits of AD capturing and establish a common vocabulary.
+    Strengthen the tooling around ADRs, in support of agile practices as well as iterative and incremental engineering processes.
+    Provide pointers to public knowledge in the context of AKM and ADRs.
+
+ADRs in the Media
+
+    (in German) Architekturentscheidungen sichtbar und nachvollziehbar gestalten at JavaLand 2026 (2026-03-10).
+    The Azure Well-Architected Framework features ADRs and this website (2024-11-10).
+    Love Unrequited: The Story of Architecture, Agile, and How Architecture Decision Records Brought Them Together, Michael Keeling in the Pragmatic Designer column of IEEE Software Vol. 39 Issue 4 (2022) (PDF)
+    Architectural decision capturing is positioned as one of the essential activities in Design Practice Reference, a LeanPub e-Book.
+    Chapter 3 of “Patterns for API Design: Simplifying Integration with Loosely Coupled Message Exchanges” in the Addison Wesley Signature Series at Pearson features six narratives guiding through the conceptual level of API design: 29 recurring decisions with options and criteria. Learn more in this blog post.
+    (in German) Gut dokumentiert: Architecture Decision Records by @obfischer published at heise online.
+
+Background Information
+
+The work in the adr organization is based on the guidelines and principles in Sustainable Architectural Decisions by Zdun et al., for instance the Y-statement format suggested in that article.
+
+More general background information and ADR guidance is available:
+
+    A comparison of seven templates can be found in “Architectural Decision Guidance Across Projects — Problem Space Modeling, Decision Backlog Management and Cloud Computing Knowledge”, a WICSA 2015 conference paper.
+    Architectural Decisions — The Making Of provides a history on architecture decision recording since the late 1990, as well as examples and guidance for providing decision rationale.
+    Documenting Architecture Decisions is the blog post from 2011 by Michael Nygard that popularized the concept.
+    Architectural Decision Records (ADR): Open & Transparent Decision History is a practice in the Open Practice Library.
+    An AWS Prescriptive Guidance recommends using architectural decision records to streamline technical decision-making for a software development project.
+    Architecture Decision Records in Action by Michael Keeling (IBM Watson Group) and Joe Runde (IBM) [YouTube] is a presentation that includes empirical numbers.
+    ADRs and Architecture Stories is part of a video series by Mark Richards explaining ADRs, starting from Nygard’s template.
+    Additional pointers and resources can be found on the web page Architectural Knowledge Management (AKM).
+```
+last but not the least, please review 00009.txt
+look at the errors we got 
+we should be handling these errors better 
+also looks like the session statistics 
+totally ignores failed responses 
+and how long it took them to fail 
+also please review what other context/information we can provide to gemini here 
+using dotnet primitives so it works cross platform 
+and without needing sudo or root privileges 
+lets make this the best gemini client possible 
