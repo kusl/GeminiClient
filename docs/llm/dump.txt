@@ -1,6 +1,6 @@
 ===============================================================================
 PROJECT EXPORT
-Generated: Sat Jul 11 01:24:49 AM EDT 2026
+Generated: Sat Jul 11 01:25:53 AM EDT 2026
 Project Path: /home/kushal/src/dotnet/GeminiClient
 ===============================================================================
 
@@ -16,7 +16,8 @@ DIRECTORY STRUCTURE:
 │   │   │   ├── 00003.txt
 │   │   │   ├── 00004.txt
 │   │   │   ├── 00005.txt
-│   │   │   └── 00006.txt
+│   │   │   ├── 00006.txt
+│   │   │   └── 00007.txt
 │   │   ├── collabskus_dump.txt
 │   │   ├── commands.txt
 │   │   ├── dump.txt
@@ -587,7 +588,7 @@ MODIFIED: 2025-12-24 14:29:56
 ================================================================================
 FILE: Directory.Packages.props
 SIZE: 1.79 KB
-MODIFIED: 2026-07-11 01:24:07
+MODIFIED: 2026-07-11 01:25:37
 ================================================================================
 
 <Project>
@@ -615,7 +616,7 @@ MODIFIED: 2026-07-11 01:24:07
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="$(MicrosoftExtensionsVersion)" />
 
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftExtensionsVersion)" />
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.1.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.10.0" />
   </ItemGroup>
 </Project>
 
@@ -5142,7 +5143,7 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 
 
 ===============================================================================
-EXPORT COMPLETED: Sat Jul 11 01:24:50 AM EDT 2026
+EXPORT COMPLETED: Sat Jul 11 01:25:54 AM EDT 2026
 Total Files Found: 44
 Files Exported: 44
 Files Skipped: 0 (binary or large files)
