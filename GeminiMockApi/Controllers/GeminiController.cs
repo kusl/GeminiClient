@@ -154,15 +154,18 @@ public class GeminiController : ControllerBase
                 return true;
             case "503":
                 error = new ObjectResult(SimpleEnvelope(503, "UNAVAILABLE",
-                    "The model is overloaded. Please try again later.")) { StatusCode = 503 };
+                    "The model is overloaded. Please try again later."))
+                { StatusCode = 503 };
                 return true;
             case "500":
                 error = new ObjectResult(SimpleEnvelope(500, "INTERNAL",
-                    "An internal error occurred.")) { StatusCode = 500 };
+                    "An internal error occurred."))
+                { StatusCode = 500 };
                 return true;
             case "400":
                 error = new ObjectResult(SimpleEnvelope(400, "INVALID_ARGUMENT",
-                    "Request contains an invalid argument.")) { StatusCode = 400 };
+                    "Request contains an invalid argument."))
+                { StatusCode = 400 };
                 return true;
             case "block":
                 blockedJson = BlockedResponseJson();
