@@ -1,3 +1,8 @@
+kushal@fedora:~/src/dotnet/GeminiClient$ cd ~/src/dotnet/GeminiClient/; time dotnet format; time bash export.sh; time dotnet build; time dotnet test; time dotnet list package; time dotnet list package --outdated;
+ 
+real	0m7.123s
+user	0m11.039s
+sys	0m1.054s
 ################################################################################
 #                                                                              #
 #   REPOSITORY CONTEXT DUMP                                                    #
@@ -4097,7 +4102,7 @@ public sealed class FileLoggerProvider : ILoggerProvider
   Last git commit:       b248d9f 2025-12-24 14:32:59 -0600 use directory.packages.props
 
 --- CONTENT ---
-﻿<!-- GeminiClientConsole/GeminiClientConsole.csproj -->
+<!-- GeminiClientConsole/GeminiClientConsole.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -5083,7 +5088,7 @@ public class GeminiApiException : Exception
   Last git commit:       51ab2fc 2025-08-07 06:53:27 -0700 🎉 Initial commit: Gemini Client Console v1.0.0
 
 --- CONTENT ---
-﻿// GeminiClient/GeminiApiOptions.cs
+// GeminiClient/GeminiApiOptions.cs
 using System.ComponentModel.DataAnnotations;
 
 namespace GeminiClient;
@@ -5216,7 +5221,7 @@ public class GeminiApiOptionsValidator : IValidateOptions<GeminiApiOptions>
   Last git commit:       b248d9f 2025-12-24 14:32:59 -0600 use directory.packages.props
 
 --- CONTENT ---
-﻿<!-- GeminiClient/GeminiClient.csproj -->
+<!-- GeminiClient/GeminiClient.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <UserSecretsId>2e219e2a-064a-457d-976e-4eb51c38711a</UserSecretsId>
@@ -5594,7 +5599,7 @@ public interface IEnvironmentContextService
   Last git commit:       32d0cd0 2025-12-24 15:12:08 -0600 implement stateful gemini
 
 --- CONTENT ---
-﻿// GeminiClient/IGeminiApiClient.cs
+// GeminiClient/IGeminiApiClient.cs
 using GeminiClient.Models;
 
 namespace GeminiClient;
@@ -5648,7 +5653,7 @@ public interface IGeminiApiClient
   Last git commit:       0273cd8 2025-08-12 07:05:12 -0700 fix namespaces to match folder structure
 
 --- CONTENT ---
-﻿// GeminiClient/IModelService.cs
+// GeminiClient/IModelService.cs
 using GeminiClient.Models;
 
 namespace GeminiClient;
@@ -5760,7 +5765,7 @@ internal partial class GeminiJsonContext : JsonSerializerContext
   Last git commit:       a9a8ab0 2025-08-12 07:37:41 -0700 clean up and update documentation
 
 --- CONTENT ---
-﻿// GeminiClient/ModelService.cs (Updated for trim-safe serialization)
+// GeminiClient/ModelService.cs (Updated for trim-safe serialization)
 using System.Text.Json;
 using GeminiClient.Models;
 using Microsoft.Extensions.Caching.Memory;
@@ -6010,7 +6015,7 @@ public sealed class GeminiErrorDetail
   Last git commit:       0273cd8 2025-08-12 07:05:12 -0700 fix namespaces to match folder structure
 
 --- CONTENT ---
-﻿// GeminiClient/Models/GeminiModel.cs
+// GeminiClient/Models/GeminiModel.cs
 using System.Text.Json.Serialization;
 
 namespace GeminiClient.Models;
@@ -6224,7 +6229,7 @@ public class UsageMetadata
   Last git commit:       0273cd8 2025-08-12 07:05:12 -0700 fix namespaces to match folder structure
 
 --- CONTENT ---
-﻿// GeminiClient/Models/ModelSelectionCriteria.cs
+// GeminiClient/Models/ModelSelectionCriteria.cs
 namespace GeminiClient.Models;
 
 public class ModelSelectionCriteria
@@ -8441,7 +8446,7 @@ echo "Run the client by typing: $SYMLINK_NAME"
   Last git commit:       e123130 2026-01-03 16:34:42 -0600 run script
 
 --- CONTENT ---
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.13.35919.96
@@ -9130,3 +9135,68 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 ################################################################################
 # END OF DUMP
 ################################################################################
+
+real	0m2.625s
+user	0m1.270s
+sys	0m1.613s
+Restore complete (0.5s)
+  GeminiClient net10.0 succeeded (0.5s) → GeminiClient/bin/Debug/net10.0/GeminiClient.dll
+  GeminiMockApi net10.0 succeeded (0.5s) → GeminiMockApi/bin/Debug/net10.0/GeminiMockApi.dll
+  GeminiClientConsole net10.0 succeeded (0.3s) → GeminiClientConsole/bin/Debug/net10.0/GeminiClientConsole.dll
+
+Build succeeded in 1.5s
+
+real	0m1.598s
+user	0m1.267s
+sys	0m0.283s
+Restore complete (0.5s)
+
+Build succeeded in 0.6s
+
+real	0m0.785s
+user	0m0.857s
+sys	0m0.158s
+Restore complete (0.5s)
+
+Build succeeded in 0.6s
+Project 'GeminiClient' has the following package references
+   [net10.0]: 
+   Top-level Package                                      Requested    Resolved
+   > Microsoft.Extensions.Caching.Memory                  10.0.9       10.0.9  
+   > Microsoft.Extensions.Http                            10.0.9       10.0.9  
+   > Microsoft.Extensions.Logging.Configuration           10.0.9       10.0.9  
+   > Microsoft.Extensions.Options.DataAnnotations         10.0.9       10.0.9  
+   > Microsoft.NET.ILLink.Tasks                     (A)   [10.0.9, )   10.0.9  
+
+Project 'GeminiClientConsole' has the following package references
+   [net10.0]: 
+   Top-level Package                                     Requested   Resolved
+   > Microsoft.Extensions.Configuration                  10.0.9      10.0.9  
+   > Microsoft.Extensions.Configuration.UserSecrets      10.0.9      10.0.9  
+   > Microsoft.Extensions.Hosting                        10.0.9      10.0.9  
+
+Project 'GeminiMockApi' has the following package references
+   [net10.0]: 
+   Top-level Package                   Requested   Resolved
+   > Microsoft.AspNetCore.OpenApi      10.0.9      10.0.9  
+
+(A) : Auto-referenced package.
+
+real	0m1.574s
+user	0m1.489s
+sys	0m0.347s
+Restore complete (0.4s)
+
+Build succeeded in 0.6s
+
+The following sources were used:
+   https://api.nuget.org/v3/index.json
+
+The given project `GeminiClient` has no updates given the current sources.
+The given project `GeminiClientConsole` has no updates given the current sources.
+The given project `GeminiMockApi` has no updates given the current sources.
+
+real	0m2.449s
+user	0m1.977s
+sys	0m0.421s
+kushal@fedora:~/src/dotnet/GeminiClient$ 
