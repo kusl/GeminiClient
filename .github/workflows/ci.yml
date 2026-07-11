@@ -41,7 +41,7 @@ jobs:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
     - name: Cache NuGet packages
-      uses: actions/cache@v3
+      uses: actions/cache@v6
       with:
         path: ~/.nuget/packages
         key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
@@ -59,7 +59,7 @@ jobs:
       if: hashFiles('**/*Tests.csproj') != ''
 
     - name: Upload test results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       if: always() && hashFiles('**/*Tests.csproj') != ''
       with:
         name: test-results-${{ matrix.os }}-${{ matrix.configuration }}
