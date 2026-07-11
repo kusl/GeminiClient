@@ -18,7 +18,7 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(configurationSection);
 
-        // Manual configuration binding to avoid trimming issues
+        // Manual configuration binding to avoid trimming issues with reflection-based binders.
         services.Configure<GeminiApiOptions>(options =>
         {
             options.ApiKey = configurationSection["ApiKey"];
@@ -26,45 +26,47 @@ public static class ServiceCollectionExtensions
             options.DefaultModel = configurationSection["DefaultModel"];
             options.ModelPreference = configurationSection["ModelPreference"];
 
-            if (int.TryParse(configurationSection["TimeoutSeconds"], out int timeout))
-                options.TimeoutSeconds = timeout;
-            else
-                options.TimeoutSeconds = 30;
-
-            if (int.TryParse(configurationSection["MaxRetries"], out int retries))
-                options.MaxRetries = retries;
-            else
-                options.MaxRetries = 3;
+            options.TimeoutSeconds = int.TryParse(configurationSection["TimeoutSeconds"], out int timeout) ? timeout : 100;
+            options.MaxRetries = int.TryParse(configurationSection["MaxRetries"], out int retries) ? retries : 3;
 
             if (bool.TryParse(configurationSection["EnableDetailedLogging"], out bool logging))
+            {
                 options.EnableDetailedLogging = logging;
+            }
         });
 
-        // Add validation
         services.AddSingleton<IValidateOptions<GeminiApiOptions>, GeminiApiOptionsValidator>();
-
-        // Add memory cache for model caching
         services.TryAddSingleton<IMemoryCache, MemoryCache>();
-
-        // REGISTER NEW GROUNDING SERVICE
         services.TryAddSingleton<IEnvironmentContextService, EnvironmentContextService>();
 
-        // Register ModelService with HttpClient
+        // ModelService: a normal bounded per-request timeout is appropriate (it only lists models).
         _ = services.AddHttpClient<IModelService, ModelService>((serviceProvider, client) =>
         {
             GeminiApiOptions options = serviceProvider.GetRequiredService<IOptions<GeminiApiOptions>>().Value;
             if (string.IsNullOrWhiteSpace(options.BaseUrl))
+            {
                 throw new InvalidOperationException("Gemini BaseUrl is not configured.");
+            }
+
             client.BaseAddress = new Uri(options.BaseUrl);
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 1, 300));
         });
 
-        // Register GeminiApiClient with HttpClient
+        // GeminiApiClient: the same typed client serves both streaming and non-streaming calls.
+        // HttpClient.Timeout is a single budget covering the *entire* operation, including reading
+        // the response body — which would truncate long SSE streams. So we disable it here and let
+        // GeminiApiClient apply a per-call timeout to non-streaming requests (via a linked token),
+        // while streaming relies solely on the caller's cancellation token.
         _ = services.AddHttpClient<IGeminiApiClient, GeminiApiClient>((serviceProvider, client) =>
         {
             GeminiApiOptions options = serviceProvider.GetRequiredService<IOptions<GeminiApiOptions>>().Value;
             if (string.IsNullOrWhiteSpace(options.BaseUrl))
+            {
                 throw new InvalidOperationException("Gemini BaseUrl is not configured.");
+            }
+
             client.BaseAddress = new Uri(options.BaseUrl);
+            client.Timeout = Timeout.InfiniteTimeSpan;
         });
 
         return services;

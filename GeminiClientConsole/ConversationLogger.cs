@@ -1,14 +1,18 @@
 // GeminiClientConsole/ConversationLogger.cs
 using System.Text;
+using GeminiClient;
 
 namespace GeminiClientConsole;
 
 /// <summary>
-/// Handles logging of all prompts, responses, and errors to text files.
-/// Thread-safe implementation with proper resource management.
+/// Handles logging of prompts, responses, failures, cancellations, and session statistics to a
+/// per-session text file. Thread-safe, with resilient resource management: a failure to write a
+/// single entry is reported to stderr but never throws into the caller.
 /// </summary>
 public class ConversationLogger : IDisposable
 {
+    private const string Rule = "────────────────────────────────────────────────────────────";
+
     private readonly string _logDirectory;
     private readonly string _sessionLogPath;
     private readonly StreamWriter _logWriter;
@@ -33,10 +37,7 @@ public class ConversationLogger : IDisposable
 
         try
         {
-            _logWriter = new StreamWriter(_sessionLogPath, append: true, Encoding.UTF8)
-            {
-                AutoFlush = true
-            };
+            _logWriter = new StreamWriter(_sessionLogPath, append: true, Encoding.UTF8) { AutoFlush = true };
             WriteSessionHeader();
         }
         catch (Exception ex)
@@ -45,55 +46,67 @@ public class ConversationLogger : IDisposable
         }
     }
 
-    private void WriteSessionHeader()
-    {
-        var header = new StringBuilder();
-        header.AppendLine("════════════════════════════════════════════════════════════");
-        header.AppendLine("           GEMINI CONVERSATION LOG");
-        header.AppendLine("════════════════════════════════════════════════════════════");
-        header.AppendLine($"Session Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-        header.AppendLine($"Log File: {_sessionLogPath}");
-        header.AppendLine("════════════════════════════════════════════════════════════");
-        header.AppendLine();
+    // ---- Public directory helpers (also used by FileLoggerProvider and configuration loading) ----
 
-        lock (_writeLock)
-        {
-            _logWriter.Write(header.ToString());
-        }
-    }
+    /// <summary>The per-user data directory for logs (XDG on Linux, LocalAppData on Windows, App Support on macOS).</summary>
+    public static string GetDefaultLogDirectory() => Path.Combine(GetDataDirectory(), "logs");
 
-    private static string GetDefaultLogDirectory()
+    /// <summary>Root per-user *data* directory for the application.</summary>
+    public static string GetDataDirectory()
     {
         if (OperatingSystem.IsWindows())
         {
             return Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "GeminiClient",
-                "logs");
+                "GeminiClient");
         }
-        else if (OperatingSystem.IsMacOS())
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Library", "Application Support", "GeminiClient");
+        }
+
+        // Linux / Unix — XDG_DATA_HOME (default ~/.local/share).
+        string? xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        if (string.IsNullOrWhiteSpace(xdgDataHome))
         {
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return Path.Combine(
-                home,
-                "Library",
-                "Application Support",
-                "GeminiClient",
-                "logs");
+            xdgDataHome = Path.Combine(home, ".local", "share");
         }
-        else // Linux / Unix - XDG Compliance
-        {
-            string? xdgDataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
 
-            if (string.IsNullOrWhiteSpace(xdgDataHome))
-            {
-                string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-                xdgDataHome = Path.Combine(home, ".local", "share");
-            }
-
-            return Path.Combine(xdgDataHome, "gemini-client", "logs");
-        }
+        return Path.Combine(xdgDataHome, "gemini-client");
     }
+
+    /// <summary>Root per-user *config* directory (XDG_CONFIG_HOME on Linux, AppData/App Support elsewhere).</summary>
+    public static string GetConfigDirectory()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "GeminiClient");
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Library", "Application Support", "GeminiClient");
+        }
+
+        string? xdgConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        if (string.IsNullOrWhiteSpace(xdgConfigHome))
+        {
+            string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            xdgConfigHome = Path.Combine(home, ".config");
+        }
+
+        return Path.Combine(xdgConfigHome, "gemini-client");
+    }
+
+    // ---- Logging API --------------------------------------------------------------------------
 
     public void LogPrompt(string prompt, string modelName, bool isStreaming)
     {
@@ -102,51 +115,76 @@ public class ConversationLogger : IDisposable
             return;
         }
 
-        var entry = new StringBuilder();
-        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] PROMPT");
+        StringBuilder entry = new();
+        entry.AppendLine($"[{Now()}] PROMPT");
         entry.AppendLine($"Model: {modelName}");
         entry.AppendLine($"Mode: {(isStreaming ? "Streaming" : "Standard")}");
-        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine(Rule);
         entry.AppendLine(prompt);
-        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine(Rule);
         entry.AppendLine();
-
         WriteToLog(entry.ToString());
     }
 
-    public void LogResponse(string response, TimeSpan elapsedTime, string modelName)
+    public void LogResponse(string response, TimeSpan elapsedTime, string modelName,
+        TimeSpan? timeToFirstToken = null, bool streaming = false)
     {
         if (string.IsNullOrEmpty(response) || string.IsNullOrEmpty(modelName))
         {
             return;
         }
 
-        var entry = new StringBuilder();
-        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] RESPONSE");
+        StringBuilder entry = new();
+        entry.AppendLine($"[{Now()}] RESPONSE");
         entry.AppendLine($"Model: {modelName}");
+        entry.AppendLine($"Mode: {(streaming ? "Streaming" : "Standard")}");
+        if (timeToFirstToken is { } ttft)
+        {
+            entry.AppendLine($"Time to First Token: {FormatElapsedTime(ttft)}");
+        }
         entry.AppendLine($"Elapsed Time: {FormatElapsedTime(elapsedTime)}");
         entry.AppendLine($"Characters: {response.Length:N0}");
-        entry.AppendLine($"Words: {response.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length:N0}");
-        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine($"Words: {CountWords(response):N0}");
+        entry.AppendLine(Rule);
         entry.AppendLine(response);
-        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine(Rule);
         entry.AppendLine();
-
         WriteToLog(entry.ToString());
     }
 
-    public void LogError(Exception exception, string modelName, string? prompt = null)
+    /// <summary>Logs a failed attempt, including how long it took to fail and structured error context.</summary>
+    public void LogFailure(Exception exception, string modelName, string? prompt, TimeSpan elapsed)
     {
-        if (exception == null || string.IsNullOrEmpty(modelName))
+        if (exception is null || string.IsNullOrEmpty(modelName))
         {
             return;
         }
 
-        var entry = new StringBuilder();
-        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ERROR");
+        StringBuilder entry = new();
+        entry.AppendLine($"[{Now()}] FAILURE");
         entry.AppendLine($"Model: {modelName}");
+        entry.AppendLine($"Time to Failure: {FormatElapsedTime(elapsed)}");
         entry.AppendLine($"Error Type: {exception.GetType().Name}");
-        entry.AppendLine($"Error Message: {exception.Message}");
+
+        if (exception is GeminiApiException gex)
+        {
+            entry.AppendLine($"Kind: {gex.Kind}");
+            if (gex.StatusCode is { } status)
+            {
+                entry.AppendLine($"HTTP Status: {(int)status} {status}");
+            }
+            if (!string.IsNullOrEmpty(gex.ApiStatus))
+            {
+                entry.AppendLine($"API Status: {gex.ApiStatus}");
+            }
+            if (gex.RetryAfter is { } retry)
+            {
+                entry.AppendLine($"Retry After: {FormatElapsedTime(retry)}");
+            }
+            entry.AppendLine($"Transient: {gex.IsTransient} | QuotaZero: {gex.IsQuotaZero}");
+        }
+
+        entry.AppendLine($"Message: {exception.Message}");
 
         if (!string.IsNullOrWhiteSpace(prompt))
         {
@@ -154,16 +192,31 @@ public class ConversationLogger : IDisposable
             entry.AppendLine(prompt);
         }
 
-        if (exception.InnerException != null)
+        if (exception.InnerException is not null)
         {
-            entry.AppendLine($"Inner Exception: {exception.InnerException.Message}");
+            entry.AppendLine($"Inner Exception: {exception.InnerException.GetType().Name}: {exception.InnerException.Message}");
         }
 
         entry.AppendLine("Stack Trace:");
-        entry.AppendLine(exception.StackTrace);
-        entry.AppendLine("────────────────────────────────────────────────────────────");
+        entry.AppendLine(exception.StackTrace ?? "(none)");
+        entry.AppendLine(Rule);
         entry.AppendLine();
+        WriteToLog(entry.ToString());
+    }
 
+    public void LogCancellation(string modelName, string? prompt, TimeSpan elapsed)
+    {
+        StringBuilder entry = new();
+        entry.AppendLine($"[{Now()}] CANCELLED");
+        entry.AppendLine($"Model: {modelName}");
+        entry.AppendLine($"Elapsed Before Cancel: {FormatElapsedTime(elapsed)}");
+        if (!string.IsNullOrWhiteSpace(prompt))
+        {
+            entry.AppendLine("Original Prompt:");
+            entry.AppendLine(prompt);
+        }
+        entry.AppendLine(Rule);
+        entry.AppendLine();
         WriteToLog(entry.ToString());
     }
 
@@ -174,45 +227,89 @@ public class ConversationLogger : IDisposable
             return;
         }
 
-        var entry = new StringBuilder();
-        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] COMMAND: {command}");
-        entry.AppendLine();
+        WriteToLog($"[{Now()}] COMMAND: {command}{Environment.NewLine}{Environment.NewLine}");
+    }
 
+    /// <summary>Writes a full session-statistics block, including failures and latency breakdowns.</summary>
+    public void LogSessionStats(SessionStatistics stats)
+    {
+        ArgumentNullException.ThrowIfNull(stats);
+
+        StringBuilder entry = new();
+        entry.AppendLine($"[{Now()}] SESSION STATISTICS");
+        entry.AppendLine(Rule);
+        entry.AppendLine($"Attempts: {stats.TotalAttempts} (success {stats.SuccessCount}, failed {stats.FailureCount}, cancelled {stats.CancelledCount}, empty {stats.EmptyCount})");
+        entry.AppendLine($"Success Rate: {stats.SuccessRate:P0}");
+        if (stats.AverageSuccessTime is { } avg)
+        {
+            entry.AppendLine($"Response Time (success): avg {FormatElapsedTime(avg)}, fastest {FormatElapsedTime(stats.FastestSuccessTime!.Value)}, slowest {FormatElapsedTime(stats.SlowestSuccessTime!.Value)}");
+        }
+        if (stats.AverageTimeToFirstToken is { } ttft)
+        {
+            entry.AppendLine($"Avg Time to First Token: {FormatElapsedTime(ttft)}");
+        }
+        if (stats.FailureCount > 0 && stats.AverageFailureTime is { } aft)
+        {
+            entry.AppendLine($"Avg Time to Failure: {FormatElapsedTime(aft)}");
+        }
+        entry.AppendLine($"Total Output: {stats.TotalResponseCharacters:N0} characters");
+        entry.AppendLine($"Session Duration: {FormatElapsedTime(stats.SessionDuration)}");
+
+        if (stats.FailureCategories.Count > 0)
+        {
+            entry.AppendLine();
+            entry.AppendLine("Failures by type:");
+            foreach (KeyValuePair<string, int> failure in stats.FailureCategories.OrderByDescending(x => x.Value))
+            {
+                entry.AppendLine($"  - {failure.Key}: {failure.Value}");
+            }
+        }
+
+        entry.AppendLine();
+        entry.AppendLine("Model usage:");
+        foreach (ModelUsage usage in stats.ModelUsage)
+        {
+            string avgStr = usage.AverageSuccessTime is { } t ? $", avg {FormatElapsedTime(t)}" : string.Empty;
+            entry.AppendLine($"  - {usage.Model}: {usage.Attempts} attempt(s), {usage.Successes} ok{avgStr}");
+        }
+
+        entry.AppendLine(Rule);
+        entry.AppendLine();
         WriteToLog(entry.ToString());
     }
 
-    public void LogSessionStats(int totalRequests, TimeSpan avgResponseTime,
-        TimeSpan sessionDuration, Dictionary<string, int> modelUsage)
+    public string GetLogFilePath() => _sessionLogPath;
+
+    public string GetLogDirectory() => _logDirectory;
+
+    // ---- Internals ----------------------------------------------------------------------------
+
+    private void WriteSessionHeader()
     {
-        modelUsage ??= [];
+        StringBuilder header = new();
+        header.AppendLine("════════════════════════════════════════════════════════════");
+        header.AppendLine("           GEMINI CONVERSATION LOG");
+        header.AppendLine("════════════════════════════════════════════════════════════");
+        header.AppendLine($"Session Started: {Now()}");
+        header.AppendLine($"Log File: {_sessionLogPath}");
+        header.AppendLine("════════════════════════════════════════════════════════════");
+        header.AppendLine();
 
-        var entry = new StringBuilder();
-        entry.AppendLine($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SESSION STATISTICS");
-        entry.AppendLine("────────────────────────────────────────────────────────────");
-        entry.AppendLine($"Total Requests: {totalRequests}");
-        entry.AppendLine($"Average Response Time: {FormatElapsedTime(avgResponseTime)}");
-        entry.AppendLine($"Session Duration: {FormatElapsedTime(sessionDuration)}");
-        entry.AppendLine();
-        entry.AppendLine("Model Usage:");
-        foreach (var kvp in modelUsage.OrderByDescending(x => x.Value))
+        lock (_writeLock)
         {
-            entry.AppendLine($"  - {kvp.Key}: {kvp.Value} requests");
+            _logWriter.Write(header.ToString());
         }
-        entry.AppendLine("────────────────────────────────────────────────────────────");
-        entry.AppendLine();
-
-        WriteToLog(entry.ToString());
     }
 
     private void WriteToLog(string content)
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(ConversationLogger));
-        }
-
         lock (_writeLock)
         {
+            if (_disposed)
+            {
+                return; // logging after disposal is a no-op rather than an exception
+            }
+
             try
             {
                 _logWriter.Write(content);
@@ -224,47 +321,55 @@ public class ConversationLogger : IDisposable
         }
     }
 
-    public string GetLogFilePath() => _sessionLogPath;
+    private static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
 
-    public string GetLogDirectory() => _logDirectory;
+    private static int CountWords(string text) =>
+        text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
 
     private static string FormatElapsedTime(TimeSpan elapsed)
     {
         if (elapsed.TotalMilliseconds < 1000)
+        {
             return $"{elapsed.TotalMilliseconds:F0}ms";
-        else if (elapsed.TotalSeconds < 60)
+        }
+        if (elapsed.TotalSeconds < 60)
+        {
             return $"{elapsed.TotalSeconds:F2}s";
-        else if (elapsed.TotalMinutes < 60)
+        }
+        if (elapsed.TotalMinutes < 60)
+        {
             return $"{elapsed.Minutes}m {elapsed.Seconds:D2}s";
-        else
-            return $"{elapsed.Hours}h {elapsed.Minutes:D2}m {elapsed.Seconds:D2}s";
+        }
+
+        return $"{(int)elapsed.TotalHours}h {elapsed.Minutes:D2}m {elapsed.Seconds:D2}s";
     }
 
     public void Dispose()
     {
-        if (!_disposed)
+        lock (_writeLock)
         {
-            lock (_writeLock)
+            if (_disposed)
             {
-                try
-                {
-                    _logWriter.WriteLine();
-                    _logWriter.WriteLine("════════════════════════════════════════════════════════════");
-                    _logWriter.WriteLine($"Session Ended: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                    _logWriter.WriteLine("════════════════════════════════════════════════════════════");
-                    _logWriter.Flush();
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"Error writing session footer: {ex.Message}");
-                }
-                finally
-                {
-                    _logWriter.Dispose();
-                }
+                return;
             }
 
-            _disposed = true;
+            try
+            {
+                _logWriter.WriteLine();
+                _logWriter.WriteLine("════════════════════════════════════════════════════════════");
+                _logWriter.WriteLine($"Session Ended: {Now()}");
+                _logWriter.WriteLine("════════════════════════════════════════════════════════════");
+                _logWriter.Flush();
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Error writing session footer: {ex.Message}");
+            }
+            finally
+            {
+                _logWriter.Dispose();
+                _disposed = true;
+            }
         }
 
         GC.SuppressFinalize(this);

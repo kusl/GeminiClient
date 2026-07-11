@@ -1,214 +1,198 @@
-﻿// GeminiClientConsole/ConsoleModelSelector.cs
+// GeminiClientConsole/ConsoleModelSelector.cs
 using GeminiClient;
 using GeminiClient.Models;
 using Microsoft.Extensions.Logging;
 
 namespace GeminiClientConsole;
 
+/// <summary>
+/// Presents the available models and lets the user pick one. Ordering and the default suggestion
+/// come from <see cref="GeminiModelRanking"/> so stable, general-purpose text models are preferred
+/// and preview/specialised variants are clearly labelled and never chosen by default.
+/// </summary>
 public class ConsoleModelSelector
 {
+    private const string FallbackDefault = "gemini-2.5-flash";
+
     private readonly IModelService _modelService;
     private readonly ILogger<ConsoleModelSelector> _logger;
-    private List<GeminiModel> _cachedModels = [];
+    private IReadOnlyList<GeminiModel> _cachedModels = [];
 
     public ConsoleModelSelector(IModelService modelService, ILogger<ConsoleModelSelector> logger)
     {
-        _modelService = modelService;
-        _logger = logger;
+        _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<string> SelectModelInteractivelyAsync()
+    public async Task<string> SelectModelInteractivelyAsync(CancellationToken cancellationToken = default)
     {
-        // Show loading animation while fetching model availability
-        Task loadingTask = ShowModelLoadingAnimationAsync();
+        await LoadModelsWithSpinnerAsync(cancellationToken);
 
-        try
-        {
-            // Fetch real models from the API
-            await RefreshModelCacheAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to refresh model list");
-        }
-        finally
-        {
-            _isLoadingModels = false;
-            await loadingTask;
-            // Clear loading line
-            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
-        }
+        string defaultName = GeminiModelRanking.RecommendDefault(_cachedModels) ?? FallbackDefault;
 
-        Console.WriteLine("🤖 Available Gemini Models:");
-        Console.WriteLine("═══════════════════════════");
+        Console.WriteLine();
+        ConsoleSafe.WriteLineColored("🤖 Available Gemini models:", ConsoleColor.White);
+        ConsoleSafe.WriteLineColored("═══════════════════════════", ConsoleColor.DarkGray);
 
-        // Animate model list display
         for (int i = 0; i < _cachedModels.Count; i++)
         {
-            var model = _cachedModels[i];
-            var modelName = model.GetModelIdentifier();
-            var description = model.Description ?? model.DisplayName ?? "Google Gemini Model";
+            GeminiModel model = _cachedModels[i];
+            string id = model.GetModelIdentifier();
+            string description = model.Description ?? model.DisplayName ?? "Google Gemini model";
+            if (description.Length > 60)
+            {
+                description = description[..57] + "...";
+            }
 
-            // Truncate long descriptions for console display
-            if (description.Length > 60) description = description[..57] + "...";
+            string tag = GeminiModelRanking.IsSpecialised(id)
+                ? " (specialised)"
+                : GeminiModelRanking.IsUnstable(id) ? " (preview)" : string.Empty;
 
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write($"  [{i + 1}] ");
-            Console.ResetColor();
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write(modelName);
-            Console.ResetColor();
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine($" - {description}");
-            Console.ResetColor();
-
-            // Small delay for smooth animation
-            await Task.Delay(30);
+            ConsoleSafe.WriteColored($"  [{i + 1}] ", ConsoleColor.Cyan);
+            ConsoleSafe.WriteColored(id, ConsoleColor.White);
+            ConsoleSafe.WriteLineColored($"{tag} — {description}", ConsoleColor.DarkGray);
         }
 
-        while (true)
+        if (_cachedModels.Count == 0)
+        {
+            ConsoleSafe.WriteLineColored($"  (no models returned; will use {defaultName})", ConsoleColor.DarkGray);
+            return defaultName;
+        }
+
+        while (!cancellationToken.IsCancellationRequested)
         {
             Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            string defaultName = _cachedModels.FirstOrDefault()?.GetModelIdentifier() ?? "gemini-2.5-flash";
-            Console.Write($"Select a model (1-{_cachedModels.Count}) or press Enter for default [{defaultName}]: ");
-            Console.ResetColor();
+            ConsoleSafe.WriteColored(
+                $"Select a model (1-{_cachedModels.Count}) or press Enter for default [{defaultName}]: ",
+                ConsoleColor.Yellow);
 
-            // Use async console reading with timeout
-            string? input = await ReadLineWithTimeoutAsync(TimeSpan.FromMinutes(5));
+            string? input = await ReadLineWithTimeoutAsync(TimeSpan.FromMinutes(5), cancellationToken);
 
-            // Default selection
             if (string.IsNullOrWhiteSpace(input))
             {
-                await ShowSelectionConfirmationAsync(defaultName, isDefault: true);
                 _logger.LogInformation("Model selected: {Model} (default)", defaultName);
                 return defaultName;
             }
 
-            // Parse user input
-            if (int.TryParse(input.Trim(), out int selection) &&
-                selection >= 1 && selection <= _cachedModels.Count)
+            if (int.TryParse(input.Trim(), out int selection) && selection >= 1 && selection <= _cachedModels.Count)
             {
-                string selectedModel = _cachedModels[selection - 1].GetModelIdentifier();
-                await ShowSelectionConfirmationAsync(selectedModel, isDefault: false);
-                _logger.LogInformation("Model selected: {Model}", selectedModel);
-                return selectedModel;
+                string selected = _cachedModels[selection - 1].GetModelIdentifier();
+                _logger.LogInformation("Model selected: {Model}", selected);
+                return selected;
             }
 
-            // Invalid input
-            await ShowErrorMessageAsync($"❌ Invalid selection. Please choose a number between 1 and {_cachedModels.Count}.");
+            ConsoleSafe.WriteLineColored(
+                $"❌ Invalid selection. Choose a number between 1 and {_cachedModels.Count}.", ConsoleColor.Red);
         }
+
+        return defaultName;
     }
 
-    private async Task RefreshModelCacheAsync()
+    private async Task LoadModelsWithSpinnerAsync(CancellationToken cancellationToken)
     {
-        if (_cachedModels.Count > 0) return; // Already cached
+        using CancellationTokenSource spinnerCts = new();
+        Task spinner = ShowLoadingSpinnerAsync(spinnerCts.Token);
 
         try
         {
-            // Fetch models capable of content generation
-            var models = await _modelService.GetModelsByCapabilityAsync(ModelCapability.TextGeneration);
+            await RefreshModelCacheAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to refresh model list; using fallback list");
+        }
+        finally
+        {
+            spinnerCts.Cancel();
+            try
+            {
+                await spinner;
+            }
+            catch (OperationCanceledException)
+            {
+                // expected
+            }
+            ConsoleSafe.ClearLine();
+        }
+    }
 
-            // Filter and sort for better UX
-            _cachedModels = models
-                .Where(m => !string.IsNullOrEmpty(m.Name))
-                // Prioritize newer models
-                .OrderByDescending(m => m.Name!.Contains("flash"))
-                .ThenByDescending(m => m.Name!.Contains("pro"))
-                .ThenByDescending(m => m.Name)
-                .ToList();
+    private async Task RefreshModelCacheAsync(CancellationToken cancellationToken)
+    {
+        if (_cachedModels.Count > 0)
+        {
+            return;
+        }
+
+        List<GeminiModel> models = [];
+        try
+        {
+            IReadOnlyList<GeminiModel> fetched =
+                await _modelService.GetModelsByCapabilityAsync(ModelCapability.TextGeneration, cancellationToken);
+            models = [.. fetched];
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Could not fetch models from API. Using fallback list.");
         }
 
-        // Fallback if API fails or returns nothing
-        if (_cachedModels.Count == 0)
+        if (models.Count == 0)
         {
-            _cachedModels =
+            models =
             [
-                new GeminiModel { Name = "models/gemini-2.5-flash", DisplayName = "Gemini 2.5 Flash", Description = "Fast and efficient (Fallback)" },
-                new GeminiModel { Name = "models/gemini-2.0-flash", DisplayName = "Gemini 2.0 Flash", Description = "Balanced performance (Fallback)" },
-                new GeminiModel { Name = "models/gemini-1.5-pro", DisplayName = "Gemini 1.5 Pro", Description = "High capability (Fallback)" }
+                new GeminiModel { Name = "models/gemini-2.5-flash", DisplayName = "Gemini 2.5 Flash", Description = "Fast and efficient (fallback)" },
+                new GeminiModel { Name = "models/gemini-2.0-flash", DisplayName = "Gemini 2.0 Flash", Description = "Balanced performance (fallback)" },
+                new GeminiModel { Name = "models/gemini-1.5-pro", DisplayName = "Gemini 1.5 Pro", Description = "High capability (fallback)" }
             ];
         }
+
+        _cachedModels = GeminiModelRanking.ForInteractiveChat(models);
     }
 
-    private bool _isLoadingModels = false;
-    private async Task ShowModelLoadingAnimationAsync()
+    private static async Task ShowLoadingSpinnerAsync(CancellationToken token)
     {
-        _isLoadingModels = true;
-        string[] frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        int frameIndex = 0;
-
-        while (_isLoadingModels)
+        if (Console.IsOutputRedirected)
         {
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.Write($"\r{frames[frameIndex]} Fetching available models from API...");
-            Console.ResetColor();
-            frameIndex = (frameIndex + 1) % frames.Length;
-            await Task.Delay(100);
+            return;
+        }
+
+        string[] frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        int i = 0;
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                ConsoleSafe.SetColor(ConsoleColor.DarkCyan);
+                Console.Write($"\r{frames[i]} Fetching available models…");
+                ConsoleSafe.ResetColor();
+                i = (i + 1) % frames.Length;
+                await Task.Delay(100, token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected
         }
     }
 
-    private static async Task<string?> ReadLineWithTimeoutAsync(TimeSpan timeout)
+    private static async Task<string?> ReadLineWithTimeoutAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
-        Task<string?> readTask = Task.Run(() => Console.ReadLine());
-        var timeoutTask = Task.Delay(timeout);
+        Task<string?> readTask = Task.Run(Console.ReadLine);
+        Task timeoutTask = Task.Delay(timeout, cancellationToken);
 
-        Task completedTask = await Task.WhenAny(readTask, timeoutTask);
-        if (completedTask == timeoutTask)
+        Task completed = await Task.WhenAny(readTask, timeoutTask).ConfigureAwait(false);
+        if (completed != readTask)
         {
-            Console.WriteLine("\n⏰ Selection timeout - using default model.");
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                ConsoleSafe.WriteLineColored("\n⏰ Selection timed out — using default model.", ConsoleColor.Yellow);
+            }
             return null;
         }
 
-        return await readTask;
-    }
-
-    private static async Task ShowSelectionConfirmationAsync(string modelName, bool isDefault)
-    {
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.Write("✓ Selected: ");
-        Console.ResetColor();
-
-        // Animate the model name
-        foreach (char c in modelName)
-        {
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write(c);
-            await Task.Delay(30);
-        }
-
-        if (isDefault)
-        {
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.Write(" (default)");
-        }
-
-        Console.ResetColor();
-        Console.WriteLine();
-
-        await Task.Delay(200);
-        Console.ForegroundColor = ConsoleColor.Green;
-        Console.WriteLine("🎉 Ready to go!");
-        Console.ResetColor();
-        await Task.Delay(300);
-    }
-
-    private static async Task ShowErrorMessageAsync(string message)
-    {
-        Console.ForegroundColor = ConsoleColor.Red;
-        for (int i = 0; i < 3; i++)
-        {
-            Console.Write("\r" + message);
-            await Task.Delay(200);
-            Console.Write("\r" + new string(' ', message.Length));
-            await Task.Delay(100);
-        }
-        Console.WriteLine("\r" + message);
-        Console.ResetColor();
-        await Task.Delay(500);
+        return await readTask.ConfigureAwait(false);
     }
 }

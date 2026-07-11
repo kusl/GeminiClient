@@ -1,4 +1,4 @@
-﻿// GeminiClientConsole/AppRunner.cs
+// GeminiClientConsole/AppRunner.cs
 using System.Diagnostics;
 using System.Text;
 using GeminiClient;
@@ -7,20 +7,28 @@ using Microsoft.Extensions.Logging;
 
 namespace GeminiClientConsole;
 
-public class AppRunner : IDisposable
+/// <summary>
+/// Drives the interactive REPL: reads prompts, dispatches commands, streams/awaits responses,
+/// records per-request telemetry (including failures and cancellations), and prints a session
+/// summary on exit. Ctrl+C cancels an in-flight request without killing the process; pressing it
+/// again at the prompt exits cleanly with a summary.
+/// </summary>
+public sealed class AppRunner : IDisposable
 {
     private readonly IGeminiApiClient _geminiClient;
     private readonly ILogger<AppRunner> _logger;
     private readonly ConsoleModelSelector _modelSelector;
     private readonly ConversationLogger _conversationLogger;
 
-    // State Management
-    private string? _selectedModel;
-    private readonly List<ResponseMetrics> _sessionMetrics = [];
-    private readonly List<Content> _chatHistory = []; // Main conversation state
+    private readonly SessionStatistics _stats = new();
+    private readonly List<Content> _chatHistory = [];
+    private readonly CancellationTokenSource _appCts = new();
 
+    private CancellationTokenSource? _requestCts;
+    private volatile bool _requestInFlight;
     private bool _streamingEnabled = true;
     private bool _disposed;
+    private string _selectedModel = "gemini-2.5-flash";
 
     public AppRunner(
         IGeminiApiClient geminiClient,
@@ -28,480 +36,674 @@ public class AppRunner : IDisposable
         ConsoleModelSelector modelSelector,
         ConversationLogger conversationLogger)
     {
-        _geminiClient = geminiClient;
-        _logger = logger;
-        _modelSelector = modelSelector;
-        _conversationLogger = conversationLogger;
+        _geminiClient = geminiClient ?? throw new ArgumentNullException(nameof(geminiClient));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _modelSelector = modelSelector ?? throw new ArgumentNullException(nameof(modelSelector));
+        _conversationLogger = conversationLogger ?? throw new ArgumentNullException(nameof(conversationLogger));
     }
 
     public async Task RunAsync()
     {
-        _logger.LogInformation("Application starting...");
-
-        Console.ForegroundColor = ConsoleColor.DarkCyan;
-        Console.WriteLine($"📝 Conversation log: {_conversationLogger.GetLogFilePath()}");
-        Console.ResetColor();
-        Console.WriteLine();
-
-        // Select model at startup
-        _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
-
-        while (true)
-        {
-            Console.WriteLine($"\n📝 Enter prompt ('exit', 'reset', 'model', 'stats', 'log', 'stream' [{(_streamingEnabled ? "ON" : "OFF")}]):");
-
-            // Visual indicator for context depth
-            if (_chatHistory.Count > 0)
-            {
-                Console.ForegroundColor = ConsoleColor.DarkGray;
-                Console.WriteLine($"   (Context: {_chatHistory.Count / 2} turns)");
-                Console.ResetColor();
-            }
-
-            Console.Write("> ");
-            string? input = Console.ReadLine();
-
-            if (string.IsNullOrWhiteSpace(input))
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("⚠ Prompt cannot be empty");
-                Console.ResetColor();
-                continue;
-            }
-
-            // Commands
-            if (input.Equals("exit", StringComparison.OrdinalIgnoreCase))
-            {
-                _conversationLogger.LogCommand("exit");
-                DisplaySessionSummary();
-                Console.WriteLine("\nGoodbye! 👋");
-                break;
-            }
-
-            if (input.Equals("reset", StringComparison.OrdinalIgnoreCase))
-            {
-                _conversationLogger.LogCommand("reset");
-                _chatHistory.Clear();
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("✨ Conversation context cleared. Starting fresh.");
-                Console.ResetColor();
-                continue;
-            }
-
-            if (input.Equals("model", StringComparison.OrdinalIgnoreCase))
-            {
-                _conversationLogger.LogCommand("model");
-                _selectedModel = await _modelSelector.SelectModelInteractivelyAsync();
-                continue;
-            }
-
-            if (input.Equals("stats", StringComparison.OrdinalIgnoreCase))
-            {
-                _conversationLogger.LogCommand("stats");
-                DisplaySessionSummary();
-                continue;
-            }
-
-            if (input.Equals("log", StringComparison.OrdinalIgnoreCase))
-            {
-                _conversationLogger.LogCommand("log");
-                OpenLogFolder();
-                continue;
-            }
-
-            if (input.Equals("stream", StringComparison.OrdinalIgnoreCase))
-            {
-                _streamingEnabled = !_streamingEnabled;
-                _conversationLogger.LogCommand($"stream ({(_streamingEnabled ? "enabled" : "disabled")})");
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine($"✓ Streaming {(_streamingEnabled ? "enabled" : "disabled")}");
-                Console.ResetColor();
-                continue;
-            }
-
-            // Processing
-            // 1. Add User Prompt to History
-            _chatHistory.Add(new Content
-            {
-                Role = "user",
-                Parts = [new Part { Text = input }]
-            });
-
-            if (_streamingEnabled)
-            {
-                await ProcessPromptStreamingAsync(input);
-            }
-            else
-            {
-                await ProcessPromptAsync(input);
-            }
-        }
-
-        _logger.LogInformation("Application finished");
-    }
-
-    private async Task ProcessPromptStreamingAsync(string prompt)
-    {
-        _conversationLogger.LogPrompt(prompt, _selectedModel!, isStreaming: true);
+        _logger.LogInformation("Application starting");
+        Console.CancelKeyPress += OnCancelKeyPress;
 
         try
         {
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine($"\n╭─── Streaming Response ───╮");
-            Console.ResetColor();
+            PrintBanner();
+            _selectedModel = await _modelSelector.SelectModelInteractivelyAsync(_appCts.Token);
+            ConsoleSafe.WriteLineColored($"\n✓ Using model: {_selectedModel}", ConsoleColor.Green);
 
-            var totalTimer = Stopwatch.StartNew();
-            var responseBuilder = new StringBuilder();
-            bool firstChunkReceived = false;
-
-            // Pass full history here instead of just 'prompt'
-            await foreach (string chunk in _geminiClient.StreamGenerateContentAsync(_selectedModel!, _chatHistory))
+            while (!_appCts.IsCancellationRequested)
             {
-                if (!firstChunkReceived)
+                PrintPrompt();
+
+                string? input = await ReadInputAsync(_appCts.Token);
+                if (input is null)
                 {
-                    firstChunkReceived = true;
-                    Console.ForegroundColor = ConsoleColor.DarkGreen;
-                    Console.WriteLine($"⚡ First response: {totalTimer.ElapsedMilliseconds}ms");
-                    Console.ResetColor();
-                    Console.WriteLine();
+                    break; // Ctrl+C while idle, or end-of-input (piped stdin)
+                }
+
+                input = input.Trim();
+                if (input.Length == 0)
+                {
+                    ConsoleSafe.WriteLineColored("⚠ Prompt cannot be empty. Type a message or 'help'.", ConsoleColor.Yellow);
+                    continue;
+                }
+
+                if (await HandleCommandAsync(input, out bool exit))
+                {
+                    if (exit)
+                    {
+                        break;
+                    }
+                    continue;
+                }
+
+                _chatHistory.Add(new Content { Role = "user", Parts = [new Part { Text = input }] });
+
+                if (_streamingEnabled)
+                {
+                    await ProcessPromptStreamingAsync(input);
+                }
+                else
+                {
+                    await ProcessPromptAsync(input);
+                }
+            }
+        }
+        finally
+        {
+            Console.CancelKeyPress -= OnCancelKeyPress;
+            DisplaySessionSummary();
+            Console.WriteLine("\nGoodbye! 👋");
+            _logger.LogInformation("Application finished");
+        }
+    }
+
+    // ---- Ctrl+C handling ----------------------------------------------------------------------
+
+    private void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
+    {
+        // Never allow Ctrl+C to hard-terminate the process; we always shut down gracefully so the
+        // session summary is written and the conversation log is closed properly.
+        e.Cancel = true;
+
+        if (_requestInFlight && _requestCts is not null)
+        {
+            ConsoleSafe.WriteLineColored(
+                "\n⏹ Cancelling current request… (press Ctrl+C again to exit)", ConsoleColor.Yellow);
+            TryCancel(_requestCts);
+        }
+        else
+        {
+            ConsoleSafe.WriteLineColored("\n⏹ Shutting down…", ConsoleColor.Yellow);
+            TryCancel(_appCts);
+        }
+    }
+
+    private static void TryCancel(CancellationTokenSource cts)
+    {
+        try
+        {
+            cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // already gone; nothing to do
+        }
+    }
+
+    private static async Task<string?> ReadInputAsync(CancellationToken cancellationToken)
+    {
+        Task<string?> readTask = Task.Run(Console.ReadLine);
+        Task completed = await Task.WhenAny(readTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+        return completed == readTask ? await readTask.ConfigureAwait(false) : null;
+    }
+
+    // ---- Commands -----------------------------------------------------------------------------
+
+    private async Task<bool> HandleCommandAsync(string input, out bool exit)
+    {
+        exit = false;
+        switch (input.ToLowerInvariant())
+        {
+            case "exit":
+            case "quit":
+                _conversationLogger.LogCommand("exit");
+                exit = true;
+                return true;
+
+            case "reset":
+                _conversationLogger.LogCommand("reset");
+                _chatHistory.Clear();
+                ConsoleSafe.WriteLineColored("✨ Conversation context cleared. Starting fresh.", ConsoleColor.Green);
+                return true;
+
+            case "model":
+                _conversationLogger.LogCommand("model");
+                _selectedModel = await _modelSelector.SelectModelInteractivelyAsync(_appCts.Token);
+                ConsoleSafe.WriteLineColored($"✓ Using model: {_selectedModel}", ConsoleColor.Green);
+                return true;
+
+            case "stats":
+                _conversationLogger.LogCommand("stats");
+                DisplaySessionSummary();
+                return true;
+
+            case "log":
+                _conversationLogger.LogCommand("log");
+                OpenLogLocation();
+                return true;
+
+            case "stream":
+                _streamingEnabled = !_streamingEnabled;
+                _conversationLogger.LogCommand($"stream ({(_streamingEnabled ? "on" : "off")})");
+                ConsoleSafe.WriteLineColored(
+                    $"✓ Streaming {(_streamingEnabled ? "enabled" : "disabled")}.", ConsoleColor.Green);
+                return true;
+
+            case "help":
+            case "?":
+                PrintHelp();
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    // ---- Streaming request --------------------------------------------------------------------
+
+    private async Task ProcessPromptStreamingAsync(string prompt)
+    {
+        _conversationLogger.LogPrompt(prompt, _selectedModel, isStreaming: true);
+
+        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(_appCts.Token);
+        _requestCts = cts;
+        _requestInFlight = true;
+
+        Stopwatch timer = Stopwatch.StartNew();
+        StringBuilder responseBuilder = new();
+        TimeSpan? ttft = null;
+        bool anyChunk = false;
+
+        ConsoleSafe.WriteLineColored("\n╭─── Streaming Response ───╮", ConsoleColor.Cyan);
+
+        try
+        {
+            await foreach (string chunk in _geminiClient.StreamGenerateContentAsync(_selectedModel, _chatHistory, cts.Token))
+            {
+                if (!anyChunk)
+                {
+                    anyChunk = true;
+                    ttft = timer.Elapsed;
+                    ConsoleSafe.WriteLineColored($"⚡ First token in {FormatElapsedTime(ttft.Value)}", ConsoleColor.DarkGreen);
                 }
 
                 Console.Write(chunk);
                 responseBuilder.Append(chunk);
             }
 
-            totalTimer.Stop();
-            Console.WriteLine();
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.WriteLine("╰────────────────╯");
-            Console.ResetColor();
+            timer.Stop();
+            EndStreamFrame();
 
             string completeResponse = responseBuilder.ToString();
-
-            // 2. Add Model Response to History
-            _chatHistory.Add(new Content
+            if (!anyChunk || completeResponse.Length == 0)
             {
-                Role = "model",
-                Parts = [new Part { Text = completeResponse }]
-            });
+                RollbackLastUserTurn();
+                RecordAndWarnEmpty(prompt, timer.Elapsed, streaming: true);
+                return;
+            }
 
-            // Log response
-            _conversationLogger.LogResponse(completeResponse, totalTimer.Elapsed, _selectedModel!);
+            _chatHistory.Add(new Content { Role = "model", Parts = [new Part { Text = completeResponse }] });
+            _conversationLogger.LogResponse(completeResponse, timer.Elapsed, _selectedModel, ttft, streaming: true);
 
-            var metrics = new ResponseMetrics
+            RequestRecord record = new()
             {
-                Model = _selectedModel!,
+                Model = _selectedModel,
+                Streaming = true,
+                Outcome = RequestOutcome.Success,
+                Elapsed = timer.Elapsed,
+                TimeToFirstToken = ttft,
                 PromptLength = prompt.Length,
-                ResponseLength = completeResponse.Length,
-                ElapsedTime = totalTimer.Elapsed,
-                Timestamp = DateTime.Now
+                ResponseLength = completeResponse.Length
             };
-
-            _sessionMetrics.Add(metrics);
-            DisplayStreamingMetrics(metrics, completeResponse);
+            _stats.Record(record);
+            DisplayMetrics("Streaming Performance", record, completeResponse);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            timer.Stop();
+            EndStreamFrame();
+            HandleCancellation(prompt, timer.Elapsed, responseBuilder, ttft, streaming: true, anyChunk);
+        }
+        catch (GeminiApiException ex)
+        {
+            timer.Stop();
+            EndStreamFrame();
+            HandleApiFailure(ex, prompt, timer.Elapsed, streaming: true);
         }
         catch (Exception ex)
         {
-            // If request fails, remove the last user prompt so the history doesn't get out of sync/corrupted
-            if (_chatHistory.Count > 0 && _chatHistory.Last().Role == "user")
-            {
-                _chatHistory.RemoveAt(_chatHistory.Count - 1);
-            }
-
-            _conversationLogger.LogError(ex, _selectedModel!, prompt);
-            HandleException(ex);
+            timer.Stop();
+            EndStreamFrame();
+            HandleUnexpectedFailure(ex, prompt, timer.Elapsed, streaming: true);
+        }
+        finally
+        {
+            _requestInFlight = false;
+            _requestCts = null;
         }
     }
+
+    // ---- Non-streaming request ----------------------------------------------------------------
 
     private async Task ProcessPromptAsync(string prompt)
     {
-        _conversationLogger.LogPrompt(prompt, _selectedModel!, isStreaming: false);
-        Task? animationTask = null;
+        _conversationLogger.LogPrompt(prompt, _selectedModel, isStreaming: false);
+
+        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(_appCts.Token);
+        _requestCts = cts;
+        _requestInFlight = true;
+
+        using CancellationTokenSource animationCts = new();
+        Task animation = ShowProgressAnimationAsync(animationCts.Token);
+        Stopwatch timer = Stopwatch.StartNew();
+
         try
         {
-            animationTask = ShowProgressAnimation();
-            var totalTimer = Stopwatch.StartNew();
+            string? result = await _geminiClient.GenerateContentAsync(_selectedModel, _chatHistory, cts.Token);
+            timer.Stop();
+            await StopAnimationAsync(animationCts, animation);
 
-            // Pass full history here
-            string? result = await _geminiClient.GenerateContentAsync(_selectedModel!, _chatHistory);
-
-            totalTimer.Stop();
-            _isAnimating = false;
-            if (animationTask != null) await animationTask;
-            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
-
-            if (result != null)
+            if (!string.IsNullOrEmpty(result))
             {
-                // 2. Add Model Response to History
-                _chatHistory.Add(new Content
-                {
-                    Role = "model",
-                    Parts = [new Part { Text = result }]
-                });
+                _chatHistory.Add(new Content { Role = "model", Parts = [new Part { Text = result }] });
+                _conversationLogger.LogResponse(result, timer.Elapsed, _selectedModel);
 
-                _conversationLogger.LogResponse(result, totalTimer.Elapsed, _selectedModel!);
-                var metrics = new ResponseMetrics
+                RequestRecord record = new()
                 {
-                    Model = _selectedModel!,
+                    Model = _selectedModel,
+                    Streaming = false,
+                    Outcome = RequestOutcome.Success,
+                    Elapsed = timer.Elapsed,
                     PromptLength = prompt.Length,
-                    ResponseLength = result.Length,
-                    ElapsedTime = totalTimer.Elapsed,
-                    Timestamp = DateTime.Now
+                    ResponseLength = result.Length
                 };
-                _sessionMetrics.Add(metrics);
-
-                DisplayResponse(result, metrics);
+                _stats.Record(record);
+                DisplayResponse(result, record);
             }
             else
             {
-                // Rollback history on empty response
-                if (_chatHistory.Count > 0) _chatHistory.RemoveAt(_chatHistory.Count - 1);
-
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"⚠ No response received (took {FormatElapsedTime(totalTimer.Elapsed)})");
-                Console.ResetColor();
+                RollbackLastUserTurn();
+                RecordAndWarnEmpty(prompt, timer.Elapsed, streaming: false);
             }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            timer.Stop();
+            await StopAnimationAsync(animationCts, animation);
+            HandleCancellation(prompt, timer.Elapsed, new StringBuilder(), null, streaming: false, anyChunk: false);
+        }
+        catch (GeminiApiException ex)
+        {
+            timer.Stop();
+            await StopAnimationAsync(animationCts, animation);
+            HandleApiFailure(ex, prompt, timer.Elapsed, streaming: false);
         }
         catch (Exception ex)
         {
-            // Rollback history on error
-            if (_chatHistory.Count > 0) _chatHistory.RemoveAt(_chatHistory.Count - 1);
-
-            _conversationLogger.LogError(ex, _selectedModel!, prompt);
-            _isAnimating = false;
-            if (animationTask != null) await animationTask;
-            Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
-            HandleException(ex);
+            timer.Stop();
+            await StopAnimationAsync(animationCts, animation);
+            HandleUnexpectedFailure(ex, prompt, timer.Elapsed, streaming: false);
+        }
+        finally
+        {
+            _requestInFlight = false;
+            _requestCts = null;
         }
     }
 
-    private void HandleException(Exception ex)
+    // ---- Outcome handlers (UI-frame agnostic) -------------------------------------------------
+
+    private void HandleCancellation(string prompt, TimeSpan elapsed, StringBuilder partial, TimeSpan? ttft, bool streaming, bool anyChunk)
     {
-        if (ex is HttpRequestException httpEx)
+        if (streaming && anyChunk && partial.Length > 0)
         {
-            if (httpEx.Message.Contains("500"))
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"\n❌ Server Error: The model '{_selectedModel}' is experiencing issues.");
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"💡 Tip: Try switching to a different model using the 'model' command.");
-                Console.ResetColor();
-                _logger.LogError(httpEx, "Server error from Gemini API");
-            }
-            else
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"\n❌ Network Error: {httpEx.Message}");
-                Console.ResetColor();
-                _logger.LogError(httpEx, "HTTP error during content generation");
-            }
+            // Preserve what the user already saw so follow-up turns keep context.
+            _chatHistory.Add(new Content { Role = "model", Parts = [new Part { Text = partial.ToString() }] });
         }
         else
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine($"\n❌ Unexpected Error: {ex.Message}");
-            Console.ResetColor();
-            _logger.LogError(ex, "Error during content generation");
-        }
-    }
-
-    private void OpenLogFolder()
-    {
-        try
-        {
-            string logDirectory = _conversationLogger.GetLogDirectory();
-            if (OperatingSystem.IsWindows())
-            {
-                Process.Start("explorer.exe", logDirectory);
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                Process.Start("open", logDirectory);
-            }
-            else if (OperatingSystem.IsLinux())
-            {
-                Process.Start("xdg-open", logDirectory);
-            }
-
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine($"✓ Opened log folder: {logDirectory}");
-            Console.ResetColor();
-        }
-        catch (Exception ex)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine($"⚠ Could not open folder: {ex.Message}");
-            Console.WriteLine($"📁 Log location: {_conversationLogger.GetLogDirectory()}");
-            Console.ResetColor();
-        }
-    }
-
-    private bool _isAnimating = false;
-    private async Task ShowProgressAnimation()
-    {
-        _isAnimating = true;
-        string[] spinner = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        int spinnerIndex = 0;
-        DateTime startTime = DateTime.Now;
-
-        while (_isAnimating)
-        {
-            TimeSpan elapsed = DateTime.Now - startTime;
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-            Console.Write($"\r{spinner[spinnerIndex]} Generating response... [{elapsed:mm\\:ss\\.ff}]");
-            Console.ResetColor();
-            spinnerIndex = (spinnerIndex + 1) % spinner.Length;
-            await Task.Delay(100);
-        }
-    }
-
-    private void DisplayResponse(string response, ResponseMetrics metrics)
-    {
-        int wordCount = response.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        double tokensPerSecond = EstimateTokens(response) / Math.Max(metrics.ElapsedTime.TotalSeconds, 0.001);
-
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine($"\n╭─── Response ─── ⏱ {FormatElapsedTime(metrics.ElapsedTime)} ───╮");
-        Console.ResetColor();
-
-        Console.WriteLine(response);
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("╰────────────────╯");
-        Console.ResetColor();
-
-        DisplayMetrics(metrics, wordCount, tokensPerSecond);
-    }
-
-    private void DisplayStreamingMetrics(ResponseMetrics metrics, string response)
-    {
-        int wordCount = response.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
-        double tokensPerSecond = EstimateTokens(response) / Math.Max(metrics.ElapsedTime.TotalSeconds, 0.001);
-
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine($"📊 Streaming Performance Metrics:");
-
-        string speedBar = CreateSpeedBar(tokensPerSecond);
-        Console.WriteLine($"   └─ Total Time: {FormatElapsedTime(metrics.ElapsedTime)}");
-        Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
-        Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
-        Console.WriteLine($"   └─ Mode: 🌊 Streaming (real-time)");
-        if (_sessionMetrics.Count > 1)
-        {
-            var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
-            string comparison = metrics.ElapsedTime < avgTime ? "🟢 faster" : "🔴 slower";
-            Console.WriteLine($"   └─ Session Avg: {FormatElapsedTime(avgTime)} ({comparison})");
+            RollbackLastUserTurn();
         }
 
-        Console.ResetColor();
+        ConsoleSafe.WriteLineColored($"⏹ Request cancelled after {FormatElapsedTime(elapsed)}.", ConsoleColor.Yellow);
+        _conversationLogger.LogCancellation(_selectedModel, prompt, elapsed);
+
+        _stats.Record(new RequestRecord
+        {
+            Model = _selectedModel,
+            Streaming = streaming,
+            Outcome = RequestOutcome.Cancelled,
+            Elapsed = elapsed,
+            TimeToFirstToken = ttft,
+            PromptLength = prompt.Length,
+            ResponseLength = partial.Length
+        });
     }
 
-    private void DisplayMetrics(ResponseMetrics metrics, int wordCount, double tokensPerSecond)
+    private void HandleApiFailure(GeminiApiException ex, string prompt, TimeSpan elapsed, bool streaming)
     {
-        Console.ForegroundColor = ConsoleColor.DarkGray;
-        Console.WriteLine($"📊 Performance Metrics:");
+        RollbackLastUserTurn();
 
-        string speedBar = CreateSpeedBar(tokensPerSecond);
-        Console.WriteLine($"   └─ Response Time: {FormatElapsedTime(metrics.ElapsedTime)}");
-        Console.WriteLine($"   └─ Words: {wordCount} | Characters: {metrics.ResponseLength:N0}");
-        Console.WriteLine($"   └─ Est. Tokens: ~{EstimateTokens(metrics.ResponseLength)} | Speed: {tokensPerSecond:F1} tokens/s {speedBar}");
-        if (_sessionMetrics.Count > 1)
+        string icon = ex.Kind switch
         {
-            var avgTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
-            string comparison = metrics.ElapsedTime < avgTime ? "🟢 faster" : "🔴 slower";
-            Console.WriteLine($"   └─ Session Avg: {FormatElapsedTime(avgTime)} ({comparison})");
-        }
-
-        Console.ResetColor();
-    }
-
-    private static string CreateSpeedBar(double tokensPerSecond)
-    {
-        int barLength = Math.Min((int)(tokensPerSecond / 10), 10);
-        string bar = new string('█', barLength) + new string('░', 10 - barLength);
-        string speedRating = tokensPerSecond switch
-        {
-            < 10 => "🐌",
-            < 30 => "🚶",
-            < 50 => "🏃",
-            < 100 => "🚀",
-            _ => "⚡"
+            GeminiErrorKind.RateLimited => "⏳",
+            GeminiErrorKind.ServiceUnavailable => "🟠",
+            GeminiErrorKind.Unauthorized => "🔑",
+            GeminiErrorKind.ContentBlocked => "🚫",
+            GeminiErrorKind.Timeout => "⌛",
+            GeminiErrorKind.Network => "📡",
+            GeminiErrorKind.BadRequest => "✋",
+            _ => "❌"
         };
-        return $"[{bar}] {speedRating}";
+
+        ConsoleSafe.WriteLineColored($"{icon} {ex.Message}", ConsoleColor.Red);
+
+        if (ex.RetryAfter is { } retry
+            && ex.Kind is GeminiErrorKind.RateLimited or GeminiErrorKind.ServiceUnavailable
+            && !ex.IsQuotaZero)
+        {
+            ConsoleSafe.WriteLineColored($"   ↻ Suggested wait: ~{Math.Ceiling(retry.TotalSeconds):0}s", ConsoleColor.DarkYellow);
+        }
+
+        if (ex.Kind is GeminiErrorKind.RateLimited or GeminiErrorKind.ServiceUnavailable or GeminiErrorKind.Unauthorized)
+        {
+            ConsoleSafe.WriteLineColored("   💡 Tip: use the 'model' command to switch to a different model.", ConsoleColor.DarkGray);
+        }
+
+        _conversationLogger.LogFailure(ex, _selectedModel, prompt, elapsed);
+        _logger.LogWarning(ex, "Request to {Model} failed ({Kind})", _selectedModel, ex.Kind);
+
+        _stats.Record(new RequestRecord
+        {
+            Model = _selectedModel,
+            Streaming = streaming,
+            Outcome = RequestOutcome.Failed,
+            Elapsed = elapsed,
+            PromptLength = prompt.Length,
+            ResponseLength = 0,
+            ErrorCategory = ex.Kind.ToString()
+        });
+    }
+
+    private void HandleUnexpectedFailure(Exception ex, string prompt, TimeSpan elapsed, bool streaming)
+    {
+        RollbackLastUserTurn();
+        ConsoleSafe.WriteLineColored($"❌ Unexpected error: {ex.Message}", ConsoleColor.Red);
+        _conversationLogger.LogFailure(ex, _selectedModel, prompt, elapsed);
+        _logger.LogError(ex, "Unexpected error during generation for {Model}", _selectedModel);
+
+        _stats.Record(new RequestRecord
+        {
+            Model = _selectedModel,
+            Streaming = streaming,
+            Outcome = RequestOutcome.Failed,
+            Elapsed = elapsed,
+            PromptLength = prompt.Length,
+            ResponseLength = 0,
+            ErrorCategory = ex.GetType().Name
+        });
+    }
+
+    private void RecordAndWarnEmpty(string prompt, TimeSpan elapsed, bool streaming)
+    {
+        ConsoleSafe.WriteLineColored(
+            $"⚠ No content returned (took {FormatElapsedTime(elapsed)}). It may have been empty or filtered.",
+            ConsoleColor.Yellow);
+        _conversationLogger.LogResponse("(no content returned)", elapsed, _selectedModel, null, streaming);
+
+        _stats.Record(new RequestRecord
+        {
+            Model = _selectedModel,
+            Streaming = streaming,
+            Outcome = RequestOutcome.Empty,
+            Elapsed = elapsed,
+            PromptLength = prompt.Length,
+            ResponseLength = 0
+        });
+    }
+
+    // ---- Display ------------------------------------------------------------------------------
+
+    private static void EndStreamFrame()
+    {
+        Console.WriteLine();
+        ConsoleSafe.WriteLineColored("╰──────────────────────────╯", ConsoleColor.Cyan);
+    }
+
+    private void DisplayResponse(string response, RequestRecord record)
+    {
+        ConsoleSafe.WriteLineColored($"\n╭─── Response ── ⏱ {FormatElapsedTime(record.Elapsed)} ──╮", ConsoleColor.Cyan);
+        Console.WriteLine(response);
+        ConsoleSafe.WriteLineColored("╰──────────────────────────╯", ConsoleColor.Cyan);
+        DisplayMetrics("Performance", record, response);
+    }
+
+    private void DisplayMetrics(string title, RequestRecord record, string responseText)
+    {
+        int wordCount = CountWords(responseText);
+        double seconds = Math.Max(record.Elapsed.TotalSeconds, 0.001);
+        double tokensPerSecond = EstimateTokens(record.ResponseLength) / seconds;
+
+        ConsoleSafe.SetColor(ConsoleColor.DarkGray);
+        Console.WriteLine($"📊 {title}:");
+        if (record.Streaming && record.TimeToFirstToken is { } ttft)
+        {
+            Console.WriteLine($"   └─ Time to first token : {FormatElapsedTime(ttft)}");
+        }
+        Console.WriteLine($"   └─ Total time          : {FormatElapsedTime(record.Elapsed)}");
+        Console.WriteLine($"   └─ Words / characters  : {wordCount} / {record.ResponseLength:N0}");
+        Console.WriteLine($"   └─ Est. tokens / speed : ~{EstimateTokens(record.ResponseLength)} / {tokensPerSecond:F1} tok/s {CreateSpeedBar(tokensPerSecond)}");
+
+        if (_stats.SuccessCount > 1 && _stats.AverageSuccessTime is { } avg)
+        {
+            string comparison = record.Elapsed < avg ? "🟢 faster than avg" : "🔴 slower than avg";
+            Console.WriteLine($"   └─ Session avg         : {FormatElapsedTime(avg)} ({comparison})");
+        }
+        ConsoleSafe.ResetColor();
     }
 
     private void DisplaySessionSummary()
     {
-        if (_sessionMetrics.Count == 0)
+        if (_stats.TotalAttempts == 0)
         {
-            Console.WriteLine("\n📈 No requests made yet in this session.");
+            Console.WriteLine("\n📈 No requests were made this session.");
             return;
         }
 
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("\n╔═══ Session Statistics ═══╗");
-        Console.ResetColor();
-        int totalRequests = _sessionMetrics.Count;
-        var avgResponseTime = TimeSpan.FromMilliseconds(_sessionMetrics.Average(m => m.ElapsedTime.TotalMilliseconds));
-        TimeSpan minResponseTime = _sessionMetrics.Min(m => m.ElapsedTime);
-        TimeSpan maxResponseTime = _sessionMetrics.Max(m => m.ElapsedTime);
-        int totalChars = _sessionMetrics.Sum(m => m.ResponseLength);
-        TimeSpan sessionDuration = DateTime.Now - _sessionMetrics.First().Timestamp;
+        ConsoleSafe.WriteLineColored("\n╔══════ Session Statistics ══════╗", ConsoleColor.Cyan);
+        Console.WriteLine($"  📊 Attempts: {_stats.TotalAttempts}  (✅ {_stats.SuccessCount}  ❌ {_stats.FailureCount}  ⏹ {_stats.CancelledCount}  ⚠ {_stats.EmptyCount})");
+        Console.WriteLine($"  🎯 Success rate: {_stats.SuccessRate:P0}");
 
-        Console.WriteLine($"  📊 Total Requests: {totalRequests}");
-        Console.WriteLine($"  ⏱  Average Response: {FormatElapsedTime(avgResponseTime)}");
-        Console.WriteLine($"  🚀 Fastest: {FormatElapsedTime(minResponseTime)}");
-        Console.WriteLine($"  🐌 Slowest: {FormatElapsedTime(maxResponseTime)}");
-        Console.WriteLine($"  📝 Total Output: {totalChars:N0} characters");
-        Console.WriteLine($"  ⏰ Session Duration: {FormatElapsedTime(sessionDuration)}");
-        Console.WriteLine($"  🌊 Streaming: {(_streamingEnabled ? "Enabled" : "Disabled")}");
-        Console.WriteLine($"  💭 Context Depth: {_chatHistory.Count / 2} turns");
-
-        var modelUsage = _sessionMetrics.GroupBy(m => m.Model)
-            .Select(g => new { Model = g.Key, Count = g.Count(), AvgTime = g.Average(m => m.ElapsedTime.TotalSeconds) })
-            .OrderByDescending(m => m.Count);
-        Console.WriteLine("\n  🤖 Models Used:");
-        foreach (var usage in modelUsage)
+        if (_stats.AverageSuccessTime is { } avg)
         {
-            Console.WriteLine($"     └─ {usage.Model}: {usage.Count} requests (avg {usage.AvgTime:F2}s)");
+            Console.WriteLine($"  ⏱  Success time: avg {FormatElapsedTime(avg)} · 🚀 {FormatElapsedTime(_stats.FastestSuccessTime!.Value)} · 🐌 {FormatElapsedTime(_stats.SlowestSuccessTime!.Value)}");
+        }
+        if (_stats.AverageTimeToFirstToken is { } ttft)
+        {
+            Console.WriteLine($"  ⚡ Avg time to first token: {FormatElapsedTime(ttft)}");
+        }
+        if (_stats.FailureCount > 0 && _stats.AverageFailureTime is { } aft)
+        {
+            Console.WriteLine($"  💥 Avg time to failure: {FormatElapsedTime(aft)}");
         }
 
-        Console.ForegroundColor = ConsoleColor.Cyan;
-        Console.WriteLine("╚════════════════════════╝");
-        Console.ResetColor();
+        Console.WriteLine($"  📝 Total output: {_stats.TotalResponseCharacters:N0} characters");
+        Console.WriteLine($"  ⏰ Session duration: {FormatElapsedTime(_stats.SessionDuration)}");
+        Console.WriteLine($"  🌊 Streaming: {(_streamingEnabled ? "enabled" : "disabled")}");
+        Console.WriteLine($"  💭 Context depth: {CountTurns()} turn(s)");
 
-        var modelUsageDict = modelUsage.ToDictionary(m => m.Model, m => m.Count);
-        _conversationLogger.LogSessionStats(totalRequests, avgResponseTime, sessionDuration, modelUsageDict);
+        IReadOnlyDictionary<string, int> failures = _stats.FailureCategories;
+        if (failures.Count > 0)
+        {
+            Console.WriteLine("\n  ⚠ Failures by type:");
+            foreach (KeyValuePair<string, int> failure in failures.OrderByDescending(x => x.Value))
+            {
+                Console.WriteLine($"     └─ {failure.Key}: {failure.Value}");
+            }
+        }
+
+        Console.WriteLine("\n  🤖 Models used:");
+        foreach (ModelUsage usage in _stats.ModelUsage)
+        {
+            string avgStr = usage.AverageSuccessTime is { } t ? $", avg {FormatElapsedTime(t)}" : string.Empty;
+            Console.WriteLine($"     └─ {usage.Model}: {usage.Attempts} attempt(s), {usage.Successes} ok{avgStr}");
+        }
+
+        ConsoleSafe.WriteLineColored("╚════════════════════════════════╝", ConsoleColor.Cyan);
+        _conversationLogger.LogSessionStats(_stats);
     }
+
+    // ---- Progress animation -------------------------------------------------------------------
+
+    private static async Task ShowProgressAnimationAsync(CancellationToken token)
+    {
+        if (Console.IsOutputRedirected)
+        {
+            return; // don't emit spinner control characters when piped
+        }
+
+        string[] frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        int i = 0;
+        Stopwatch sw = Stopwatch.StartNew();
+
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                ConsoleSafe.SetColor(ConsoleColor.DarkCyan);
+                Console.Write($"\r{frames[i]} Generating… [{sw.Elapsed:mm\\:ss\\.f}]");
+                ConsoleSafe.ResetColor();
+                i = (i + 1) % frames.Length;
+                await Task.Delay(100, token).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // expected on completion
+        }
+    }
+
+    private static async Task StopAnimationAsync(CancellationTokenSource cts, Task animation)
+    {
+        cts.Cancel();
+        try
+        {
+            await animation.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // expected
+        }
+        ConsoleSafe.ClearLine();
+    }
+
+    // ---- Banner / prompt / help ---------------------------------------------------------------
+
+    private void PrintBanner()
+    {
+        ConsoleSafe.WriteLineColored("╔════════════════════════════════════════╗", ConsoleColor.Cyan);
+        ConsoleSafe.WriteLineColored("║        Gemini Client Console           ║", ConsoleColor.Cyan);
+        ConsoleSafe.WriteLineColored("╚════════════════════════════════════════╝", ConsoleColor.Cyan);
+        ConsoleSafe.WriteLineColored($"📝 Conversation log: {_conversationLogger.GetLogFilePath()}", ConsoleColor.DarkCyan);
+    }
+
+    private void PrintPrompt()
+    {
+        Console.WriteLine();
+        ConsoleSafe.WriteLineColored(
+            $"Enter a prompt or command (exit · reset · model · stats · log · stream[{(_streamingEnabled ? "ON" : "OFF")}] · help):",
+            ConsoleColor.DarkGray);
+        if (_chatHistory.Count > 0)
+        {
+            ConsoleSafe.WriteLineColored($"(context: {CountTurns()} turn(s))", ConsoleColor.DarkGray);
+        }
+        Console.Write("> ");
+    }
+
+    private static void PrintHelp()
+    {
+        ConsoleSafe.WriteLineColored("\nAvailable commands:", ConsoleColor.Cyan);
+        Console.WriteLine("  exit / quit  — end the session (a summary is printed)");
+        Console.WriteLine("  reset        — clear the conversation context");
+        Console.WriteLine("  model        — choose a different model");
+        Console.WriteLine("  stats        — show session statistics so far");
+        Console.WriteLine("  log          — open the folder containing the conversation log");
+        Console.WriteLine("  stream       — toggle streaming vs. standard responses");
+        Console.WriteLine("  help / ?     — show this help");
+        Console.WriteLine("Anything else is sent to the model as a prompt.");
+        Console.WriteLine("Tip: press Ctrl+C to cancel a running request; again to exit.");
+    }
+
+    private void OpenLogLocation()
+    {
+        string dir = _conversationLogger.GetLogDirectory();
+        ConsoleSafe.WriteLineColored($"📁 Log folder: {dir}", ConsoleColor.Cyan);
+        ConsoleSafe.WriteLineColored($"📝 Current log: {_conversationLogger.GetLogFilePath()}", ConsoleColor.DarkCyan);
+
+        try
+        {
+            ProcessStartInfo psi = OperatingSystem.IsWindows()
+                ? new ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true }
+                : OperatingSystem.IsMacOS()
+                    ? new ProcessStartInfo("open", $"\"{dir}\"") { UseShellExecute = false }
+                    : new ProcessStartInfo("xdg-open", $"\"{dir}\"") { UseShellExecute = false };
+            Process.Start(psi);
+        }
+        catch (Exception)
+        {
+            // Opening a file browser is best-effort; the path is already printed above.
+        }
+    }
+
+    // ---- Small helpers ------------------------------------------------------------------------
+
+    private void RollbackLastUserTurn()
+    {
+        if (_chatHistory.Count > 0 && _chatHistory[^1].Role == "user")
+        {
+            _chatHistory.RemoveAt(_chatHistory.Count - 1);
+        }
+    }
+
+    private int CountTurns() => _chatHistory.Count(c => c.Role == "user");
+
+    private static int CountWords(string text) =>
+        text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+
+    private static int EstimateTokens(int characterCount) => Math.Max(0, characterCount / 4);
+
+    private static int EstimateTokens(string text) => EstimateTokens(text.Length);
 
     private static string FormatElapsedTime(TimeSpan elapsed)
     {
         if (elapsed.TotalMilliseconds < 1000)
+        {
             return $"{elapsed.TotalMilliseconds:F0}ms";
-        else if (elapsed.TotalSeconds < 60)
+        }
+        if (elapsed.TotalSeconds < 60)
+        {
             return $"{elapsed.TotalSeconds:F2}s";
-        else
+        }
+        if (elapsed.TotalMinutes < 60)
+        {
             return $"{elapsed.Minutes}m {elapsed.Seconds:D2}s";
+        }
+
+        return $"{(int)elapsed.TotalHours}h {elapsed.Minutes:D2}m {elapsed.Seconds:D2}s";
     }
 
-    private static int EstimateTokens(string text) => text.Length / 4;
-    private static int EstimateTokens(int charCount) => charCount / 4;
+    private static string CreateSpeedBar(double tokensPerSecond)
+    {
+        int bars = Math.Clamp((int)(tokensPerSecond / 10), 0, 10);
+        return "[" + new string('█', bars) + new string('░', 10 - bars) + "]";
+    }
 
     public void Dispose()
     {
-        if (!_disposed)
+        if (_disposed)
         {
-            _conversationLogger?.Dispose();
-            _disposed = true;
+            return;
         }
-        GC.SuppressFinalize(this);
-    }
 
-    private class ResponseMetrics
-    {
-        public string Model { get; set; } = string.Empty;
-        public int PromptLength { get; set; }
-        public int ResponseLength { get; set; }
-        public TimeSpan ElapsedTime { get; set; }
-        public DateTime Timestamp { get; set; }
+        _disposed = true;
+
+        // Only dispose what this instance owns. The ConversationLogger is a container-managed
+        // singleton and is disposed by the DI container on host shutdown.
+        TryCancel(_appCts);
+        _appCts.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

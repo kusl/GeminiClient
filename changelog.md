@@ -1,58 +1,70 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
+semantic versioning. The base version lives solely in `Directory.Build.props`; CI appends the
+run number (e.g. `0.0.8` → `0.0.8.<run>`).
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.0.8] - 2026-07-11
 
-## [Unreleased]
-
-## [0.0.7] - Rolling Release
+A reliability-focused release: better error handling, honest session statistics (failures and
+time-to-failure are now counted), richer and more correct environment grounding, and safer
+cross-platform behaviour. See `docs/adr/` for the reasoning behind these changes.
 
 ### Added
-
-* **Hyper-Contextual Environmental Grounding**: The client now automatically captures and injects real-time system context into every API request.
-  * **Temporal Awareness**: Injects precise local date, time, and timezone offset to eliminate "temporal hallucinations" (e.g., the model now knows exactly what "now" is).
-  * **System Context**: Provides the model with the exact OS platform (Linux/Windows/macOS), version, and current user context.
-  * **Locale Awareness**: Injects the system culture/locale for appropriate formatting of dates and units.
-* **Multi-turn conversation support**: The client maintains conversation context across exchanges within a session.
-* **`reset` command**: Allows users to clear conversation history and start a fresh context.
-* **`log` command**: Opens the conversation log folder in the system's default file manager.
-* **Conversation logging**: All prompts, responses, errors, and session statistics are persisted to timestamped log files.
-* **XDG Base Directory compliance**: Log files on Linux are stored in `~/.local/share/gemini-client/logs/`.
-* **Context depth indicator**: The prompt displays the current number of conversation turns.
-* **System Instructions**: Updated API models to support the `system_instruction` field for deep context injection.
-
-### Technical
-
-* **New Service**: Added `EnvironmentContextService` to dynamically generate system prompts based on the host environment.
-* **Architecture**: Upgraded target framework to `.NET 10.0`.
-* **Optimization**: Configured Server GC and Concurrent GC for high-throughput streaming.
-* **Build**: Established `Directory.Build.props` as the single source of truth for versioning.
-
-## [0.0.6] - 2025-08-09
-
-* Cleaned up changelog to remove extra text.
-* Stream response from Gemini in server sent events.
-
-## [0.0.5] - 2025-08-09
-
-### Fixed
-
-* Removed `Console.Clear()` that was destroying terminal scrollback buffer.
-* Improved terminal compatibility for Linux/macOS users.
+- Typed error model: `GeminiApiException` with a categorized `Kind`, HTTP status, Google `status`
+  string, server-suggested `RetryAfter`, and transience / zero-tier-quota flags, plus a pure,
+  unit-tested `GeminiErrorParser` that reads Gemini's JSON error envelope (including
+  `RetryInfo.retryDelay` and `limit: 0`).
+- Bounded, automatic retry of transient failures (429/503/5xx) honouring the server's `Retry-After`
+  (capped) with exponential backoff and jitter; `MaxRetries` is now actually used.
+- Graceful cancellation: Ctrl+C cancels an in-flight request without killing the process (press
+  again at the prompt to exit); partial streamed text is preserved and the session summary is always
+  printed.
+- Session telemetry that records every attempt (success / empty / failed / cancelled) with elapsed
+  time, time-to-first-token, and an error category; the summary now reports success rate, average
+  time-to-failure, average time-to-first-token, and failures grouped by type.
+- Model ranking (`GeminiModelRanking`) that prefers stable, general-purpose text models and demotes
+  preview/specialised variants; the picker labels preview and specialised models.
+- A per-session diagnostics log file and a redirect-aware console helper.
+- A per-user `appsettings.json` location for durable configuration, plus environment-variable,
+  user-secrets (Development), and command-line configuration sources.
+- Prompt-feedback / block detection so a blocked prompt reports a clear reason instead of an empty
+  response; token-usage metadata is parsed and logged.
+- Mock API error simulations (`simulate:429|quota|503|500|400|block`) for offline testing of the
+  new error handling.
+- A `help` command and a `GeminiClient.Tests` xUnit project covering the error parser, model
+  ranking, session statistics, and environment-context builder.
 
 ### Changed
+- The console no longer registers a console logging provider; all framework/library logs go to the
+  diagnostics file so they never interleave with the UI. User-facing errors are shown as short,
+  friendly, actionable messages.
+- Configuration is resolved relative to the executable (not the current directory), making the
+  installed global tool robust to the working directory it is launched from.
+- Streaming requests no longer carry an overall HTTP timeout (long generations are legitimate);
+  non-streaming requests apply a per-call timeout derived from `TimeoutSeconds`.
+- Copyright year in build metadata is computed dynamically.
 
-* Model selection screen now preserves terminal history.
-* Use lower case `changelog` in Github Actions link.
+### Fixed
+- Garbled console output during streaming caused by asynchronous log lines writing to the console
+  concurrently with the UI.
+- Environment grounding rendered the day of week via an invalid format string; it now shows the
+  correct day name.
+- Environment grounding reported the time zone's base UTC offset, ignoring daylight saving time; it
+  now reports the current (DST-aware) offset.
+- The same error was logged multiple times as it propagated; failures are now logged once.
+- `Console.WindowWidth` could throw when output was redirected; console access is now redirect-safe.
 
-## [0.0.4] - 2025-08-07
+## [0.0.7]
+- Environment-context grounding, multi-turn conversation support, `reset` command, and
+  XDG-compliant logging.
 
-### Added
+## [0.0.6]
+- Real-time streaming support with Server-Sent Events.
 
-* Interactive console client for Google Gemini AI API.
-* Dynamic model discovery and selection.
-* Real-time performance metrics (tokens/sec).
-* Cross-platform support (Windows/Linux/macOS).
-* CI/CD pipeline via GitHub Actions.
+## [0.0.5]
+- Improved terminal compatibility by removing destructive console clears.
+
+## [0.0.4]
+- Initial interactive console client with dynamic model discovery.

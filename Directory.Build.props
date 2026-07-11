@@ -1,31 +1,31 @@
 <Project>
   <PropertyGroup>
     <!-- Single source of truth for version -->
-    <Version>0.0.7</Version>
+    <Version>0.0.8</Version>
     <FileVersion>$(Version).0</FileVersion>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
-    
+
     <!-- Repository Information -->
     <RepositoryUrl>https://github.com/kusl/GeminiClient</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
-    
+
     <!-- Common properties -->
-    <Copyright>Copyright © 2025</Copyright>
+    <Copyright>Copyright © 2025-$([System.DateTime]::UtcNow.Year) kusl</Copyright>
     <Authors>kusl</Authors>
     <Company>kusl</Company>
-    
+
     <!-- .NET Configuration -->
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    
+
     <!-- Build Optimizations -->
     <TrimMode>partial</TrimMode>
     <InvariantGlobalization>false</InvariantGlobalization>
     <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
-    
+
     <!-- Streaming Performance Optimizations -->
     <ServerGarbageCollection>true</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>

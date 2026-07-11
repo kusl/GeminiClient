@@ -1,6 +1,31 @@
-@GeminiMockApi_HostAddress = http://localhost:5058
+@GeminiMockApi_HostAddress = http://localhost:5000
 
-GET {{GeminiMockApi_HostAddress}}/weatherforecast/
+### List models
+GET {{GeminiMockApi_HostAddress}}/v1beta/models
 Accept: application/json
+
+### Generate content (normal)
+POST {{GeminiMockApi_HostAddress}}/v1beta/models/gemini-mock-turbo:generateContent
+Content-Type: application/json
+
+{
+  "contents": [ { "role": "user", "parts": [ { "text": "hello" } ] } ]
+}
+
+### Simulate a 429 rate limit (with RetryInfo)
+POST {{GeminiMockApi_HostAddress}}/v1beta/models/gemini-mock-turbo:generateContent
+Content-Type: application/json
+
+{
+  "contents": [ { "role": "user", "parts": [ { "text": "simulate:429" } ] } ]
+}
+
+### Simulate a 503 overload
+POST {{GeminiMockApi_HostAddress}}/v1beta/models/gemini-mock-turbo:generateContent
+Content-Type: application/json
+
+{
+  "contents": [ { "role": "user", "parts": [ { "text": "simulate:503" } ] } ]
+}
 
 ###

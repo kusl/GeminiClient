@@ -1,15 +1,19 @@
-﻿// GeminiClient/Models/GeminiResponse.cs
+// GeminiClient/Models/GeminiResponse.cs
 using System.Text.Json.Serialization;
 
 namespace GeminiClient.Models;
 
-// Basic response structure - Adapt based on the actual Gemini API response
+/// <summary>Response structure returned by the Gemini generateContent / streamGenerateContent endpoints.</summary>
 public class GeminiResponse
 {
     [JsonPropertyName("candidates")]
     public List<Candidate> Candidates { get; set; } = [];
 
-    // You might also have properties like "promptFeedback" depending on the request
+    [JsonPropertyName("promptFeedback")]
+    public PromptFeedback? PromptFeedback { get; set; }
+
+    [JsonPropertyName("usageMetadata")]
+    public UsageMetadata? UsageMetadata { get; set; }
 }
 
 public class Candidate
@@ -27,11 +31,6 @@ public class Candidate
     public List<SafetyRating> SafetyRatings { get; set; } = [];
 }
 
-// Content model is already defined in GeminiRequest.cs, but might differ slightly
-// in response, adjust if necessary.
-
-// Part model is already defined in GeminiRequest.cs
-
 public class SafetyRating
 {
     [JsonPropertyName("category")]
@@ -39,4 +38,33 @@ public class SafetyRating
 
     [JsonPropertyName("probability")]
     public string? Probability { get; set; }
+
+    [JsonPropertyName("blocked")]
+    public bool? Blocked { get; set; }
+}
+
+/// <summary>
+/// Feedback about the prompt itself. When a prompt is blocked, <see cref="BlockReason"/> is set
+/// and the response contains no candidates.
+/// </summary>
+public class PromptFeedback
+{
+    [JsonPropertyName("blockReason")]
+    public string? BlockReason { get; set; }
+
+    [JsonPropertyName("safetyRatings")]
+    public List<SafetyRating> SafetyRatings { get; set; } = [];
+}
+
+/// <summary>Token accounting returned by the API. All fields are optional depending on the model.</summary>
+public class UsageMetadata
+{
+    [JsonPropertyName("promptTokenCount")]
+    public int? PromptTokenCount { get; set; }
+
+    [JsonPropertyName("candidatesTokenCount")]
+    public int? CandidatesTokenCount { get; set; }
+
+    [JsonPropertyName("totalTokenCount")]
+    public int? TotalTokenCount { get; set; }
 }
