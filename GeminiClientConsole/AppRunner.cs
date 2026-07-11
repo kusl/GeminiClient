@@ -70,9 +70,10 @@ public sealed class AppRunner : IDisposable
                     continue;
                 }
 
-                if (await HandleCommandAsync(input, out bool exit))
+                (bool isCommand, bool shouldExit) = await HandleCommandAsync(userInput);
+                if (isCommand)
                 {
-                    if (exit)
+                    if (shouldExit)
                     {
                         break;
                     }
@@ -142,53 +143,56 @@ public sealed class AppRunner : IDisposable
 
     // ---- Commands -----------------------------------------------------------------------------
 
-    private async Task<bool> HandleCommandAsync(string input, out bool exit)
+    private async Task<(bool Handled, bool Exit)> HandleCommandAsync(string input)
     {
-        exit = false;
+        // Default fallback values
+        bool exit = false; 
+
         switch (input.ToLowerInvariant())
         {
             case "exit":
             case "quit":
                 _conversationLogger.LogCommand("exit");
                 exit = true;
-                return true;
+                return (true, exit);
 
             case "reset":
                 _conversationLogger.LogCommand("reset");
                 _chatHistory.Clear();
                 ConsoleSafe.WriteLineColored("✨ Conversation context cleared. Starting fresh.", ConsoleColor.Green);
-                return true;
+                return (true, exit);
 
             case "model":
                 _conversationLogger.LogCommand("model");
+                // The await happens safely here without messing with stack references
                 _selectedModel = await _modelSelector.SelectModelInteractivelyAsync(_appCts.Token);
                 ConsoleSafe.WriteLineColored($"✓ Using model: {_selectedModel}", ConsoleColor.Green);
-                return true;
+                return (true, exit);
 
             case "stats":
                 _conversationLogger.LogCommand("stats");
                 DisplaySessionSummary();
-                return true;
+                return (true, exit);
 
             case "log":
                 _conversationLogger.LogCommand("log");
                 OpenLogLocation();
-                return true;
+                return (true, exit);
 
             case "stream":
                 _streamingEnabled = !_streamingEnabled;
                 _conversationLogger.LogCommand($"stream ({(_streamingEnabled ? "on" : "off")})");
                 ConsoleSafe.WriteLineColored(
                     $"✓ Streaming {(_streamingEnabled ? "enabled" : "disabled")}.", ConsoleColor.Green);
-                return true;
+                return (true, exit);
 
             case "help":
             case "?":
                 PrintHelp();
-                return true;
+                return (true, exit);
 
             default:
-                return false;
+                return (false, exit);
         }
     }
 
