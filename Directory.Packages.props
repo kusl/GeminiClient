@@ -23,5 +23,6 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="$(MicrosoftExtensionsVersion)" />
 
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.1.0" />
   </ItemGroup>
 </Project>
