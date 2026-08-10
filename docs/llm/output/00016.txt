@@ -1,0 +1,104 @@
+kushal@fedora:~/src/dotnet/MyImapDownloader$ cd ~/src/dotnet/GeminiClient/; time dotnet format; time bash export.sh > docs/llm/output/zzz.txt; time dotnet build; time dotnet test; time dotnet list package; time dotnet list package --outdated;
+
+real	0m6.624s
+user	0m10.601s
+sys	0m0.928s
+
+real	0m2.394s
+user	0m1.203s
+sys	0m1.356s
+Restore complete (0.5s)
+  GeminiClient net10.0 succeeded (0.7s) → GeminiClient/bin/Debug/net10.0/GeminiClient.dll
+  GeminiClientConsole net10.0 succeeded (0.4s) → GeminiClientConsole/bin/Debug/net10.0/GeminiClientConsole.dll
+  GeminiMockApi net10.0 succeeded (1.2s) → GeminiMockApi/bin/Debug/net10.0/GeminiMockApi.dll
+
+Build succeeded in 1.8s
+
+real	0m1.937s
+user	0m1.445s
+sys	0m0.269s
+Restore complete (0.5s)
+
+Build succeeded in 0.6s
+
+real	0m0.773s
+user	0m0.844s
+sys	0m0.162s
+Restore complete (0.4s)
+
+Build succeeded in 0.5s
+Project 'GeminiClient' has the following package references
+   [net10.0]: 
+   Top-level Package                                      Requested     Resolved
+   > Microsoft.Extensions.Caching.Memory                  10.0.9        10.0.9  
+   > Microsoft.Extensions.Http                            10.0.9        10.0.9  
+   > Microsoft.Extensions.Logging.Configuration           10.0.9        10.0.9  
+   > Microsoft.Extensions.Options.DataAnnotations         10.0.9        10.0.9  
+   > Microsoft.NET.ILLink.Tasks                     (A)   [10.0.10, )   10.0.10 
+
+Project 'GeminiClientConsole' has the following package references
+   [net10.0]: 
+   Top-level Package                                     Requested   Resolved
+   > Microsoft.Extensions.Configuration                  10.0.9      10.0.9  
+   > Microsoft.Extensions.Configuration.UserSecrets      10.0.9      10.0.9  
+   > Microsoft.Extensions.Hosting                        10.0.9      10.0.9  
+
+Project 'GeminiMockApi' has the following package references
+   [net10.0]: 
+   Top-level Package                   Requested   Resolved
+   > Microsoft.AspNetCore.OpenApi      10.0.9      10.0.9  
+
+(A) : Auto-referenced package.
+
+real	0m1.407s
+user	0m1.391s
+sys	0m0.291s
+Restore complete (0.4s)
+
+Build succeeded in 0.5s
+
+The following sources were used:
+   https://api.nuget.org/v3/index.json
+
+Project `GeminiClient` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                                   Requested   Resolved   Latest 
+   > Microsoft.Extensions.Caching.Memory               10.0.9      10.0.9     10.0.10
+   > Microsoft.Extensions.Http                         10.0.9      10.0.9     10.0.10
+   > Microsoft.Extensions.Logging.Configuration        10.0.9      10.0.9     10.0.10
+   > Microsoft.Extensions.Options.DataAnnotations      10.0.9      10.0.9     10.0.10
+
+Project `GeminiClientConsole` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                                     Requested   Resolved   Latest 
+   > Microsoft.Extensions.Configuration                  10.0.9      10.0.9     10.0.10
+   > Microsoft.Extensions.Configuration.UserSecrets      10.0.9      10.0.9     10.0.10
+   > Microsoft.Extensions.Hosting                        10.0.9      10.0.9     10.0.10
+
+Project `GeminiMockApi` has the following updates to its packages
+   [net10.0]: 
+   Top-level Package                   Requested   Resolved   Latest 
+   > Microsoft.AspNetCore.OpenApi      10.0.9      10.0.9     10.0.10
+
+
+real	0m2.254s
+user	0m1.895s
+sys	0m0.363s
+kushal@fedora:~/src/dotnet/GeminiClient$ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
