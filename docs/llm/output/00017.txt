@@ -67,13 +67,13 @@ The given project `GeminiMockApi` has no updates given the current sources.
 real	0m2.025s
 user	0m1.769s
 sys	0m0.352s
+kushal@fedora:~/src/dotnet/GeminiClient$ time du -sh ~/.local/share/gemini-client/logs/
+2.0M	/home/kushal/.local/share/gemini-client/logs/
+
+real	0m0.014s
+user	0m0.000s
+sys	0m0.002s
 kushal@fedora:~/src/dotnet/GeminiClient$ 
-
-
-
-
-
-
 
 
 
