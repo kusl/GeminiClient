@@ -7,7 +7,7 @@
 
 DUMP METADATA
 ═════════════════════════════════════════════════════════════════════════════════
-  Generated at   : 2026-08-09T20:38:17-04:00
+  Generated at   : 2026-08-09T20:39:39-04:00
   Generator      : export.sh
   Host           : fedora
   User           : kushal
@@ -17,10 +17,10 @@ REPOSITORY METADATA
 ═════════════════════════════════════════════════════════════════════════════════
   Repository root: /home/kushal/src/dotnet/GeminiClient
   Branch         : main
-  Commit (full)  : 721a72f172d10a917fa55ef399ec6ac9b20561ad
-  Commit (short) : 721a72f
-  Commit date    : 2026-08-09 20:36:39 -0400
-  Commit message : use export sh from my restaurant
+  Commit (full)  : 6237b729d82809a0278c9452e285fbe09ee58be1
+  Commit (short) : 6237b72
+  Commit date    : 2026-08-09 20:39:23 -0400
+  Commit message : update nuget packages
   Remote origin  : git@github.com:kusl/GeminiClient.git
   Files included : 68
   Excluded path  : docs/llm/
@@ -28,8 +28,7 @@ REPOSITORY METADATA
 
 GIT WORKING TREE STATUS (first 20 lines)
 ═════════════════════════════════════════════════════════════════════════════════
- M docs/llm/commands.txt
-?? docs/llm/output/zzz.txt
+ M docs/llm/output/zzz.txt
 
 ################################################################################
 # FILE: export.sh  [THIS SCRIPT — included for full context]
@@ -1650,22 +1649,22 @@ launchSettings.json
   File name:             Directory.Packages.props
   Relative path:         Directory.Packages.props
   Absolute path:         /home/kushal/src/dotnet/GeminiClient/Directory.Packages.props
-  Size:                  2.2 KiB (2284 bytes)
-  Last modified:         2026-07-11 03:28:30.000000000 -0400
+  Size:                  2.2 KiB (2285 bytes)
+  Last modified:         2026-08-09 20:38:50.755393888 -0400
   Permissions:           -rw-r--r--
   Owner:                 kushal:kushal
   Inode:                 20586364
   Hard links:            1
   MIME type:             text/plain
-  SHA-256:               0a8ef3f626a60b7e54b90a46e606267ac7de6d6fb07e622b27a20e704fc55674
-  Last git commit:       3b34a4d 2026-07-11 05:04:43 -0400 add claude response
+  SHA-256:               6252b63e5b176667347d56043039a627b0ab06ca16bd68a2fe5fa1a27b7956cb
+  Last git commit:       6237b72 2026-08-09 20:39:23 -0400 update nuget packages
 
 --- CONTENT ---
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <MicrosoftExtensionsVersion>10.0.9</MicrosoftExtensionsVersion>
+    <MicrosoftExtensionsVersion>10.0.10</MicrosoftExtensionsVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="$(MicrosoftExtensionsVersion)" />
@@ -8757,9 +8756,9 @@ echo "Run 'dotnet run --project GeminiClientConsole' to test it."
 # DUMP SUMMARY
 ################################################################################
   Files dumped   : 68
-  Total size     : 246.2 KiB (252138 bytes)
+  Total size     : 246.2 KiB (252139 bytes)
   Output file    : /home/kushal/src/dotnet/GeminiClient/docs/llm/dump.txt
-  Completed at   : 2026-08-09T20:38:20-04:00
+  Completed at   : 2026-08-09T20:39:41-04:00
 ################################################################################
 # END OF DUMP
 ################################################################################
